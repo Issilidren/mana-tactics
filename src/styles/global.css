@@ -1,0 +1,183 @@
+:root {
+  --bg: #102030;        /* GBC dark navy */
+  --surface: #1A3048;   /* GBC panel navy */
+  --border: #D4AF37;    /* MTG gold — keep for branding */
+  --text: #F0EED8;      /* GBC cream white */
+  --text-muted: #7090B0;/* GBC muted blue */
+  --accent: #D4AF37;    /* MTG gold */
+  --danger: #CC1010;    /* GBC bright red */
+  --radius: 2px;        /* GBC hard pixel corners */
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Courier New', monospace;
+  min-height: 100vh;
+}
+
+/* ── Buttons ── */
+.btn-primary {
+  background: var(--accent);
+  color: #101010;
+  border: 2px solid #101010;
+  padding: 0.5rem 1.1rem;
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  letter-spacing: 1px;
+}
+.btn-primary:hover { opacity: 0.85; }
+.btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.btn-danger {
+  background: var(--danger);
+  color: var(--text);
+  border: none;
+  padding: 0.5rem 1.1rem;
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.btn-danger:hover { opacity: 0.85; }
+.btn-danger:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--accent);
+  border: 2px solid var(--border);
+  padding: 0.5rem 1.1rem;
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.15s;
+  letter-spacing: 1px;
+}
+.btn-ghost:hover { background: rgba(212, 175, 55, 0.15); }
+.btn-ghost:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ── Inputs ── */
+.input {
+  background: var(--surface);
+  color: var(--text);
+  border: 2px solid #285080;
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  font-family: inherit;
+  font-size: 0.9rem;
+  width: 100%;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.input:focus { border-color: var(--accent); }
+.input::placeholder { color: var(--text-muted); }
+
+/* ── Card surface ── */
+.card {
+  background: var(--surface);
+  border: 2px solid #285080;
+  border-radius: var(--radius);
+  padding: 1rem;
+}
+
+/* ── Color badges ── */
+/* GBC color badges — flat, saturated, hard pixel borders */
+.badge-white {
+  background: #E8DC90;
+  color: #101010;
+  border: 2px solid #101010;
+  padding: 0.15rem 0.5rem;
+  border-radius: 2px;
+  font-size: 0.7rem;
+  font-weight: bold;
+  display: inline-block;
+  letter-spacing: 1px;
+}
+
+.badge-blue {
+  background: #2255AA;
+  color: #EEF4FF;
+  border: 2px solid #101010;
+  padding: 0.15rem 0.5rem;
+  border-radius: 2px;
+  font-size: 0.7rem;
+  font-weight: bold;
+  display: inline-block;
+  letter-spacing: 1px;
+}
+
+.badge-black {
+  background: #6633AA;
+  color: #EEE8FF;
+  border: 2px solid #101010;
+  padding: 0.15rem 0.5rem;
+  border-radius: 2px;
+  font-size: 0.7rem;
+  font-weight: bold;
+  display: inline-block;
+  letter-spacing: 1px;
+}
+
+.badge-red {
+  background: #CC3311;
+  color: #FFF0EE;
+  border: 2px solid #101010;
+  padding: 0.15rem 0.5rem;
+  border-radius: 2px;
+  font-size: 0.7rem;
+  font-weight: bold;
+  display: inline-block;
+  letter-spacing: 1px;
+}
+
+.badge-green {
+  background: #228822;
+  color: #F0FFF0;
+  border: 2px solid #101010;
+  padding: 0.15rem 0.5rem;
+  border-radius: 2px;
+  font-size: 0.7rem;
+  font-weight: bold;
+  display: inline-block;
+  letter-spacing: 1px;
+}
+
+.badge-colorless {
+  background: #607080;
+  color: #F0F4F8;
+  border: 2px solid #101010;
+  padding: 0.15rem 0.5rem;
+  border-radius: 2px;
+  font-size: 0.7rem;
+  font-weight: bold;
+  display: inline-block;
+  letter-spacing: 1px;
+}
+
+/* ── Utility ── */
+.page-container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+.error-msg {
+  color: #ff6b6b;
+  font-size: 0.85rem;
+  margin-top: 0.4rem;
+}
+
+.loading-msg {
+  color: var(--text-muted);
+  text-align: center;
+  padding: 2rem;
+}

@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment — contains Supabase URL + anon key, never commit
+.env
+.env.local
+.env.*.local
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+*.suo
+*.user
+
+# Claude Code session files
+.claude.json
