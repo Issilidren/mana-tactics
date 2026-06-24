@@ -18,3 +18,29 @@ Thumbs.db
 
 # Claude Code session files
 .claude.json
+
+# Handoff docs + prototypes — stay local, not for repo
+Downloads/
+*.handoff.md
+*_Handoff.md
+*_handoff.md
+*_concept.png
+*_living_world.png
+*_deckbuilder.png
+*_login_screen.png
+
+# Python write helper scripts — local tooling only
+write_*.py
+
+# Any keys, secrets, or tokens outside .env
+*.pem
+*.key
+secrets.json
+credentials.json
+
+# Prototype / scratch files
+prototype/
+scratch/
+_draft_*
+*.prototype.js
+*.prototype.jsx
