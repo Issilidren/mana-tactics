@@ -221,7 +221,7 @@ export class CardEngine {
     }
     const card = p.library.shift()
     p.hand = [...p.hand, card]
-    this._log(`${who} draws ${card.name}`)
+    this._log(who === 'ai' ? 'Opponent draws a card.' : `You draw ${card.name}`)
     return true
   }
 
