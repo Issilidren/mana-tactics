@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { SoundEngine } from '../systems/SoundEngine.js'
 
 const TILE = 32
 const COLS = 25
@@ -51,7 +52,7 @@ const CONFIGS = {
         'White magic heals, protects, and lifts armies of angels above the fray.',
         'I am Archmage Solara. Earn the Solara Seal — if you can.',
       ],
-      battle: { npcName: 'Archmage Solara', color: 'white', deckType: 'archmage', reward: 100 },
+      battle: { npcName: 'Archmage Solara', color: 'white', deckType: 'archmage', reward: 100, archmage: true },
     },
     members: [
       { texture: 'npc-white', tileX: 4,  tileY: 6,  name: 'Paladin Lyra',
@@ -87,7 +88,7 @@ const CONFIGS = {
         'Card draw. Counter-spells. Control. We do not rush — we dominate.',
         'I am Archmage Tidefall. Your deck is an open book to me.',
       ],
-      battle: { npcName: 'Archmage Tidefall', color: 'blue', deckType: 'archmage', reward: 100 },
+      battle: { npcName: 'Archmage Tidefall', color: 'blue', deckType: 'archmage', reward: 100, archmage: true },
     },
     members: [
       { texture: 'npc-blue', tileX: 4,  tileY: 6,  name: 'Scholar Wavren',
@@ -125,7 +126,7 @@ const CONFIGS = {
         'Shadowmere Bog. Where every creature ends up eventually.',
         'Power demands sacrifice. Are you willing to pay?',
       ],
-      battle: { npcName: 'Archmage Shadowmere', color: 'black', deckType: 'archmage', reward: 100 },
+      battle: { npcName: 'Archmage Shadowmere', color: 'black', deckType: 'archmage', reward: 100, archmage: true },
     },
     members: [
       { texture: 'npc-black', tileX: 4,  tileY: 7,  name: 'Shade Morven',
@@ -159,7 +160,7 @@ const CONFIGS = {
         'Haste. Direct damage. First strike. Speed wins everything.',
         'Challenge me RIGHT NOW! I have been waiting!',
       ],
-      battle: { npcName: 'Archmage Embercrest', color: 'red', deckType: 'archmage', reward: 100 },
+      battle: { npcName: 'Archmage Embercrest', color: 'red', deckType: 'archmage', reward: 100, archmage: true },
     },
     members: [
       { texture: 'npc-red', tileX: 5,  tileY: 6,  name: 'Knight Blazer',
@@ -197,7 +198,7 @@ const CONFIGS = {
         'More mana, more creatures, more power. Nature does not rush — it overwhelms.',
         'Let the wilds decide our contest, challenger.',
       ],
-      battle: { npcName: 'Archmage Thornveil', color: 'green', deckType: 'archmage', reward: 100 },
+      battle: { npcName: 'Archmage Thornveil', color: 'green', deckType: 'archmage', reward: 100, archmage: true },
     },
     members: [
       { texture: 'npc-green', tileX: 3,  tileY: 6,  name: 'Ranger Vine',
@@ -338,7 +339,9 @@ class ClubScene extends Phaser.Scene {
     this.player.setDepth(10)
     this.player.body.setSize(12, 14)
     this.player.body.setOffset(2, 10)
-    this.physics.add.collider(this.player, this.wallGroup)
+    this.physics.add.collider(this.player, this.wallGroup, () => {
+      SoundEngine.bump()
+    })
   }
 
   // ── NPCs ───────────────────────────────────────────────────────────────────
@@ -420,20 +423,29 @@ class ClubScene extends Phaser.Scene {
     })
     this.eKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E)
     this.eKey.on('down', () => this.onEPress())
+    SoundEngine.startBGM('club')
   }
 
   // ── HUD ────────────────────────────────────────────────────────────────────
 
   createUI() {
     const bg = this.add.graphics().setScrollFactor(0).setDepth(20)
-    bg.fillStyle(0x0A1828)
-    bg.fillRect(0, 0, COLS * TILE, 22)
-    bg.lineStyle(2, 0x101010, 1)
-    bg.lineBetween(0, 22, COLS * TILE, 22)
+    bg.fillStyle(0x0A111E)
+    bg.fillRect(0, 0, COLS * TILE, 32)
+    bg.lineStyle(1, 0x503810, 1)
+    bg.lineBetween(0, 31, COLS * TILE, 31)
+    bg.lineStyle(1, 0xD4AF37, 1)
+    bg.lineBetween(0, 32, COLS * TILE, 32)
 
-    this.statsText = this.add.text(10, 4, '', {
-      fontSize: '12px', color: '#F0EED8', fontFamily: 'monospace',
-    }).setScrollFactor(0).setDepth(21)
+    const tokenBg = this.add.graphics().setScrollFactor(0).setDepth(21)
+    tokenBg.fillStyle(0x0A111E)
+    tokenBg.fillRect(4, 4, 210, 24)
+    tokenBg.lineStyle(1, 0xD4AF37, 0.7)
+    tokenBg.strokeRect(4, 4, 210, 24)
+
+    this.statsText = this.add.text(10, 8, '', {
+      fontSize: '11px', color: '#F0EED8', fontFamily: 'Courier New, monospace',
+    }).setScrollFactor(0).setDepth(22)
 
     this.updateStats()
 
@@ -443,6 +455,33 @@ class ClubScene extends Phaser.Scene {
       backgroundColor: '#F0EED8',
       padding: { x: 5, y: 2 },
     }).setDepth(30).setVisible(false)
+
+    this._drawCompassRose()
+  }
+
+  _drawCompassRose() {
+    const CR = this.add.graphics().setScrollFactor(0).setDepth(28)
+    const crx = 24, cry = 552, R = 18
+    CR.fillStyle(0x060C18, 0.9)
+    CR.fillCircle(crx, cry, R + 4)
+    CR.lineStyle(1, 0xD4AF37, 0.9)
+    CR.strokeCircle(crx, cry, R + 4)
+    for (const [angle, isNorth] of [[0, false], [90, true], [180, false], [270, false]]) {
+      const rad = (angle - 90) * Math.PI / 180
+      const ex = crx + Math.round(R * Math.cos(rad))
+      const ey = cry + Math.round(R * Math.sin(rad))
+      const lx = crx + Math.round(5 * Math.cos(rad + Math.PI / 2))
+      const ly = cry + Math.round(5 * Math.sin(rad + Math.PI / 2))
+      const rx = crx + Math.round(5 * Math.cos(rad - Math.PI / 2))
+      const ry = cry + Math.round(5 * Math.sin(rad - Math.PI / 2))
+      CR.fillStyle(isNorth ? 0xD4AF37 : 0x5A6070)
+      CR.fillTriangle(lx, ly, rx, ry, ex, ey)
+    }
+    CR.fillStyle(0xD4AF37)
+    CR.fillCircle(crx, cry, 3)
+    this.add.text(crx, cry - R - 6, 'N', {
+      fontSize: '8px', color: '#D4AF37', fontFamily: 'Courier New, monospace',
+    }).setScrollFactor(0).setDepth(29).setOrigin(0.5, 1)
   }
 
   updateStats() {
@@ -465,7 +504,7 @@ class ClubScene extends Phaser.Scene {
     const BOX_W = COLS * TILE - 40
     const BOX_H = 150
     const PORT_W = 70
-    const TEXT_X = BOX_X + 14
+    const TEXT_X = BOX_X + PORT_W + 22
     const TEXT_W = BOX_W - PORT_W - 30
 
     const bg = this.add.graphics().setDepth(50)
@@ -481,23 +520,23 @@ class ClubScene extends Phaser.Scene {
     // Name tab above top-left
     const tabColor = npc.def.tabColor || this.cfg.palette.tabColor || 0x4878C8
     bg.fillStyle(tabColor)
-    bg.fillRoundedRect(BOX_X + 14, BOX_Y - 22, 160, 26, { tl: 6, tr: 6, bl: 0, br: 0 })
+    bg.fillRoundedRect(BOX_X + 8, BOX_Y - 22, 160, 26, { tl: 6, tr: 6, bl: 0, br: 0 })
     bg.lineStyle(2, 0x2A1808, 1)
-    bg.strokeRoundedRect(BOX_X + 14, BOX_Y - 22, 160, 26, { tl: 6, tr: 6, bl: 0, br: 0 })
+    bg.strokeRoundedRect(BOX_X + 8, BOX_Y - 22, 160, 26, { tl: 6, tr: 6, bl: 0, br: 0 })
 
-    // Portrait zone right
+    // Portrait zone LEFT
     bg.fillStyle(0xE8DFC8)
-    bg.fillRoundedRect(BOX_X + BOX_W - PORT_W - 8, BOX_Y + 8, PORT_W, BOX_H - 16, 6)
+    bg.fillRoundedRect(BOX_X + 8, BOX_Y + 8, PORT_W, BOX_H - 16, 6)
     bg.lineStyle(1, 0x9A8060, 0.7)
-    bg.strokeRoundedRect(BOX_X + BOX_W - PORT_W - 8, BOX_Y + 8, PORT_W, BOX_H - 16, 6)
+    bg.strokeRoundedRect(BOX_X + 8, BOX_Y + 8, PORT_W, BOX_H - 16, 6)
 
     const portrait = this.add.sprite(
-      BOX_X + BOX_W - PORT_W / 2 - 8,
+      BOX_X + PORT_W / 2 + 8,
       BOX_Y + BOX_H / 2,
       npc.def.texture,
     ).setScale(3).setDepth(52)
 
-    const nameText = this.add.text(BOX_X + 24, BOX_Y - 14, npc.def.name, {
+    const nameText = this.add.text(BOX_X + 16, BOX_Y - 14, npc.def.name, {
       fontSize: '12px', color: '#FFFFFF',
       fontFamily: '"Arial", sans-serif', fontStyle: 'bold',
       stroke: '#2A1808', strokeThickness: 2,
@@ -524,6 +563,7 @@ class ClubScene extends Phaser.Scene {
   }
 
   advanceDialog() {
+    SoundEngine.dialogTick()
     if (!this.dialogState) return
     const { npc, pageIndex } = this.dialogState
     const next = pageIndex + 1
@@ -534,7 +574,8 @@ class ClubScene extends Phaser.Scene {
       this.closeDialog()
       if (npc.def.battle) {
         this.time.delayedCall(100, () => {
-          this.game.events.emit('battleStart', npc.def.battle)
+          SoundEngine.stopBGM()
+      this.game.events.emit('battleStart', npc.def.battle)
         })
       }
     }
@@ -609,7 +650,7 @@ class ClubScene extends Phaser.Scene {
       this.player.setVelocity(0, 0)
       this.cameras.main.fadeOut(500, 16, 48, 88)
       this.cameras.main.once('camerafadeoutcomplete', () => {
-        this.scene.start('WorldMap')
+        SoundEngine.stopBGM(); this.scene.start('WorldMap')
       })
     }
   }

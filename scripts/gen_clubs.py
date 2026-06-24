@@ -1,417 +1,320 @@
 """
-gen_clubs.py - Generates 5 MTG-themed club interior background images using PIL/Pillow.
-800x576 pixels, 25 cols x 18 rows, each tile is 32x32 pixels.
+gen_clubs.py — 5 MTG club interior backgrounds (800×576, 2.5D oblique style)
+Run: python scripts/gen_clubs.py
 """
-
-import os
+import sys, os
+sys.path.insert(0, os.path.dirname(__file__))
+from iso_utils import *
 from PIL import Image, ImageDraw
+import math, random
 
 OUTPUT_DIR = r"C:\Users\Kenny\mana-tactics\public\assets"
 
-# Color themes for each club
+# ── Per-club theme data ───────────────────────────────────────────────────────
 THEMES = {
     "white": {
         "filename": "club-white-bg.png",
-        "floor": (244, 240, 228),
-        "carpet": (212, 196, 96),
-        "wall": (220, 214, 196),
-        "podium_base": (248, 244, 232),
-        "podium_trim": (212, 180, 80),
-        "table": (200, 180, 120),
-        "crystal": (255, 240, 160),
-        "door_shimmer": (220, 200, 80),
-        "banner": (240, 200, 80),
-        "wall_accent": (200, 190, 160),  # vein/seam color
-        "carpet_border": (240, 220, 120),
-        "book_spine_a": (200, 160, 80),
-        "book_spine_b": (240, 220, 140),
+        "desc": "Solara Plains — cream stone, gold trim",
+        "floor_a":  (244, 240, 226),
+        "floor_b":  (228, 222, 206),
+        "floor_g":  (205, 198, 180),
+        "wall_top": (218, 212, 194),
+        "wall_face":(232, 225, 208),
+        "wall_bg":  (205, 198, 180),
+        "wall_line":(178, 168, 148),
+        "wall_hi":  (248, 244, 232),
+        "carpet":   (210, 192, 88),
+        "carpet_b": (238, 218, 118),
+        "podium":   (245, 238, 220),
+        "podium_t": (210, 178, 78),
+        "crystal":  (255, 238, 145),
+        "crystal_g":(245, 220, 90),
+        "banner":   (238, 198, 78),
+        "book_a":   (198, 158, 78),
+        "book_b":   (238, 218, 138),
+        "portal_g": (220, 198, 78),
+        "wood":     (168, 138, 78),
     },
     "blue": {
         "filename": "club-blue-bg.png",
-        "floor": (212, 220, 240),
-        "carpet": (34, 85, 170),
-        "wall": (148, 164, 196),
-        "podium_base": (28, 60, 120),
-        "podium_trim": (60, 180, 180),
-        "table": (80, 120, 180),
-        "crystal": (80, 200, 220),
-        "door_shimmer": (60, 120, 220),
-        "banner": (40, 100, 200),
-        "wall_accent": (100, 120, 160),
-        "carpet_border": (80, 140, 220),
-        "book_spine_a": (40, 80, 160),
-        "book_spine_b": (60, 180, 200),
+        "desc": "Tidefall Isles — cool slate, navy carpet",
+        "floor_a":  (210, 220, 240),
+        "floor_b":  (192, 204, 226),
+        "floor_g":  (168, 180, 205),
+        "wall_top": (148, 162, 192),
+        "wall_face":(162, 178, 210),
+        "wall_bg":  (138, 152, 182),
+        "wall_line":(112, 128, 158),
+        "wall_hi":  (188, 202, 230),
+        "carpet":   (28, 78, 165),
+        "carpet_b": (58, 118, 210),
+        "podium":   (22, 54, 118),
+        "podium_t": (55, 175, 178),
+        "crystal":  (72, 195, 218),
+        "crystal_g":(42, 158, 182),
+        "banner":   (35, 92, 192),
+        "book_a":   (38, 78, 158),
+        "book_b":   (55, 175, 198),
+        "portal_g": (55, 118, 218),
+        "wood":     (78, 115, 175),
     },
     "black": {
         "filename": "club-black-bg.png",
-        "floor": (48, 38, 62),
-        "carpet": (68, 28, 98),
-        "wall": (32, 24, 44),
-        "podium_base": (20, 16, 28),
-        "podium_trim": (140, 40, 200),
-        "table": (60, 40, 80),
-        "crystal": (180, 60, 240),
-        "door_shimmer": (120, 40, 180),
-        "banner": (100, 20, 160),
-        "wall_accent": (80, 20, 120),
-        "carpet_border": (120, 60, 160),
-        "book_spine_a": (60, 20, 80),
-        "book_spine_b": (140, 40, 180),
+        "desc": "Shadowmere Bog — dark stone, purple carpet",
+        "floor_a":  (48, 38, 62),
+        "floor_b":  (40, 30, 52),
+        "floor_g":  (32, 24, 42),
+        "wall_top": (35, 25, 50),
+        "wall_face":(45, 32, 62),
+        "wall_bg":  (30, 22, 44),
+        "wall_line":(22, 15, 32),
+        "wall_hi":  (68, 52, 88),
+        "carpet":   (65, 22, 95),
+        "carpet_b": (118, 55, 158),
+        "podium":   (18, 14, 28),
+        "podium_t": (138, 38, 195),
+        "crystal":  (175, 55, 238),
+        "crystal_g":(125, 30, 178),
+        "banner":   (95, 18, 148),
+        "book_a":   (58, 18, 78),
+        "book_b":   (138, 38, 178),
+        "portal_g": (118, 38, 178),
+        "wood":     (55, 35, 75),
     },
     "red": {
         "filename": "club-red-bg.png",
-        "floor": (88, 52, 32),
-        "carpet": (160, 28, 20),
-        "wall": (80, 40, 24),
-        "podium_base": (60, 30, 20),
-        "podium_trim": (220, 100, 20),
-        "table": (120, 60, 30),
-        "crystal": (255, 140, 20),
-        "door_shimmer": (220, 80, 20),
-        "banner": (200, 40, 20),
-        "wall_accent": (160, 60, 20),
-        "carpet_border": (220, 80, 40),
-        "book_spine_a": (120, 40, 20),
-        "book_spine_b": (200, 80, 20),
+        "desc": "Embercrest Peaks — volcanic stone, crimson carpet",
+        "floor_a":  (88, 52, 32),
+        "floor_b":  (72, 40, 22),
+        "floor_g":  (58, 30, 15),
+        "wall_top": (78, 40, 22),
+        "wall_face":(95, 52, 30),
+        "wall_bg":  (68, 35, 18),
+        "wall_line":(48, 22, 10),
+        "wall_hi":  (122, 75, 48),
+        "carpet":   (158, 25, 18),
+        "carpet_b": (218, 78, 38),
+        "podium":   (58, 28, 18),
+        "podium_t": (218, 98, 18),
+        "crystal":  (252, 135, 18),
+        "crystal_g":(198, 85, 15),
+        "banner":   (195, 35, 18),
+        "book_a":   (118, 38, 18),
+        "book_b":   (195, 78, 18),
+        "portal_g": (218, 78, 18),
+        "wood":     (115, 58, 28),
     },
     "green": {
         "filename": "club-green-bg.png",
-        "floor": (62, 78, 32),
-        "carpet": (38, 95, 28),
-        "wall": (48, 60, 24),
-        "podium_base": (80, 100, 40),
-        "podium_trim": (80, 160, 40),
-        "table": (60, 90, 30),
-        "crystal": (120, 220, 60),
-        "door_shimmer": (60, 160, 40),
-        "banner": (40, 140, 30),
-        "wall_accent": (60, 80, 20),
-        "carpet_border": (80, 160, 60),
-        "book_spine_a": (40, 80, 20),
-        "book_spine_b": (80, 160, 40),
+        "desc": "Thornveil Woods — wood planks, moss carpet",
+        "floor_a":  (60, 78, 32),
+        "floor_b":  (48, 65, 24),
+        "floor_g":  (38, 52, 18),
+        "wall_top": (52, 65, 28),
+        "wall_face":(65, 80, 35),
+        "wall_bg":  (45, 58, 22),
+        "wall_line":(32, 42, 14),
+        "wall_hi":  (88, 108, 52),
+        "carpet":   (35, 92, 25),
+        "carpet_b": (75, 155, 55),
+        "podium":   (75, 95, 38),
+        "podium_t": (75, 155, 38),
+        "crystal":  (115, 215, 55),
+        "crystal_g":(78, 162, 32),
+        "banner":   (38, 135, 28),
+        "book_a":   (38, 78, 18),
+        "book_b":   (75, 155, 38),
+        "portal_g": (55, 155, 38),
+        "wood":     (88, 62, 28),
     },
 }
 
-W, H = 800, 576
-TILE = 32
 
+def generate_club(name, t):
+    img = Image.new('RGB', (W, H), t['floor_b'])
+    d   = ImageDraw.Draw(img)
 
-def darken(color, amount=20):
-    """Return a slightly darkened version of color."""
-    return tuple(max(0, c - amount) for c in color)
+    # ── 1. Floor with depth shading ──────────────────────────────────────────
+    for row in range(1, ROWS - 1):
+        for col in range(1, COLS - 1):
+            depth_t = (row - 1) / (ROWS - 3)
+            base = lerp_color(t['floor_a'], t['floor_b'], depth_t * 0.4)
+            if (col + row) % 2 == 0:
+                base = darken(base, 10)
+            d.rectangle([(tx(col), ty(row)), (tx(col + 1), ty(row + 1))], fill=base)
+            d.line([(tx(col + 1) - 1, ty(row)), (tx(col + 1) - 1, ty(row + 1) - 1)],
+                   fill=t['floor_g'], width=1)
+            d.line([(tx(col), ty(row + 1) - 1), (tx(col + 1) - 1, ty(row + 1) - 1)],
+                   fill=t['floor_g'], width=1)
 
+    # ── 2. Walls with 3D faces ────────────────────────────────────────────────
+    for col in range(COLS):
+        wall_n(d, col, t['wall_top'], t['wall_face'], t['wall_line'], t['wall_hi'])
 
-def lighten(color, amount=20):
-    """Return a slightly lightened version of color."""
-    return tuple(min(255, c + amount) for c in color)
+    for row in range(1, ROWS):
+        wall_l(d, row, t['wall_bg'], lighten(t['wall_face'], 8), t['wall_line'], t['wall_hi'])
+        wall_r(d, row, t['wall_bg'], lighten(t['wall_face'], 8), t['wall_line'], t['wall_hi'])
 
+    # Bottom wall with portal gap (cols 11-13)
+    for col in range(COLS):
+        wall_s(d, col, t['wall_bg'], t['wall_line'], gap_cols={11, 12, 13})
 
-def draw_floor(draw, theme):
-    """Fill entire image with floor color, then draw tile grid lines."""
-    floor = theme["floor"]
-    draw.rectangle([0, 0, W - 1, H - 1], fill=floor)
-    grid_color = darken(floor, 12)
-    # Vertical lines every 32px
-    for x in range(0, W + 1, TILE):
-        draw.line([(x, 0), (x, H)], fill=grid_color, width=1)
-    # Horizontal lines every 32px
-    for y in range(0, H + 1, TILE):
-        draw.line([(0, y), (W, y)], fill=grid_color, width=1)
+    # Wall–floor shadow line
+    d.line([(0, TILE), (W, TILE)], fill=darken(t['wall_line'], 8), width=2)
 
+    # ── 3. Podium / raised platform (rows 1-2, full width) ───────────────────
+    pod_col = t['podium']
+    pod_face = darken(t['podium'], 25)
+    # Top surface
+    d.rectangle([(TILE, TILE), (W - TILE, TILE * 3)], fill=lighten(pod_col, 15))
+    # 3D front face strip
+    d.rectangle([(TILE, TILE * 3), (W - TILE, TILE * 3 + 8)], fill=pod_face)
+    # Trim line
+    d.rectangle([(TILE, TILE * 3 - 2), (W - TILE, TILE * 3)], fill=t['podium_t'])
+    d.rectangle([(TILE, TILE), (TILE + 4, TILE * 3)], fill=darken(pod_col, 22))
+    # Crystal in center
+    cx2, cy2 = 400, 64
+    d.ellipse([(cx2 - 14, cy2 - 14), (cx2 + 14, cy2 + 14)], fill=darken(t['crystal'], 35))
+    d.ellipse([(cx2 - 10, cy2 - 10), (cx2 + 10, cy2 + 10)], fill=t['crystal'])
+    d.ellipse([(cx2 - 5, cy2 - 7), (cx2 + 2, cy2 - 2)], fill=lighten(t['crystal'], 60))
+    # Decorative dots on trim
+    for dx in range(TILE + 20, W - TILE, 50):
+        d.ellipse([(dx - 3, TILE * 3 - 6), (dx + 3, TILE * 3)], fill=t['podium_t'])
 
-def draw_walls(draw, theme):
-    """Draw wall borders: top row, left col, right col, bottom row with texture."""
-    wall = theme["wall"]
-    accent = theme["wall_accent"]
+    # ── 4. Carpet (duel zone, rows 4-14, cols 4-20) ──────────────────────────
+    CX0, CY0 = tx(4), ty(4)
+    CX1, CY1 = tx(21), ty(15)
+    d.rectangle([(CX0, CY0), (CX1, CY1)], fill=t['carpet'])
+    d.rectangle([(CX0, CY0), (CX1, CY1)], outline=t['carpet_b'], width=4)
+    d.rectangle([(CX0 + 6, CY0 + 6), (CX1 - 6, CY1 - 6)],
+                outline=lighten(t['carpet'], 22), width=1)
+    # Diamond center
+    cx3, cy3 = (CX0 + CX1) // 2, (CY0 + CY1) // 2
+    ds2 = 64
+    d.polygon([(cx3, cy3 - ds2), (cx3 + ds2, cy3), (cx3, cy3 + ds2), (cx3 - ds2, cy3)],
+              outline=t['carpet_b'], fill=None)
+    ds3 = 32
+    d.polygon([(cx3, cy3 - ds3), (cx3 + ds3, cy3), (cx3, cy3 + ds3), (cx3 - ds3, cy3)],
+              outline=lighten(t['carpet'], 35), fill=None)
+    # Corner gems
+    for gx4, gy4 in [(CX0, CY0), (CX1, CY0), (CX0, CY1), (CX1, CY1)]:
+        d.ellipse([(gx4 - 6, gy4 - 6), (gx4 + 6, gy4 + 6)],
+                  fill=darken(t['crystal'], 20))
+        d.ellipse([(gx4 - 4, gy4 - 4), (gx4 + 4, gy4 + 4)], fill=t['crystal'])
+        d.ellipse([(gx4 - 2, gy4 - 5), (gx4 + 1, gy4 - 1)],
+                  fill=lighten(t['crystal'], 50))
 
-    # Top wall row (y=0 to y=32)
-    draw.rectangle([0, 0, W, TILE], fill=wall)
-    # Left wall col (x=0 to x=32)
-    draw.rectangle([0, 0, TILE, H], fill=wall)
-    # Right wall col (x=768 to x=800)
-    draw.rectangle([W - TILE, 0, W, H], fill=wall)
-    # Bottom wall row (y=544 to y=576) - except portal gap cols 11-13 (x=352-448)
-    draw.rectangle([0, H - TILE, W, H], fill=wall)
-    # Portal gap in bottom wall - clear it back to floor color so door shows
-    draw.rectangle([352, H - TILE, 448, H], fill=theme["floor"])
+    # ── 5. Bookshelves (right wall, cols 21-23, rows 3-14) ───────────────────
+    BSH_X0, BSH_X1 = tx(21), tx(24) - 2
+    BSH_Y0, BSH_Y1 = ty(3), ty(15)
+    d.rectangle([(BSH_X0, BSH_Y0), (BSH_X1, BSH_Y1)], fill=darken(t['wood'], 15))
+    depth_rect(d, BSH_X0, BSH_Y0, BSH_X1, BSH_Y0 + 5,
+               t['wood'], darken(t['wood'], 20), depth=4)
+    random.seed(hash(name) % 1000)
+    for si in range(4):
+        sy0 = BSH_Y0 + si * TILE * 3
+        sy1 = sy0 + TILE * 3
+        d.rectangle([(BSH_X0, sy1 - 5), (BSH_X1, sy1)], fill=lighten(t['wood'], 15))
+        bx = BSH_X0 + 4
+        while bx < BSH_X1 - 4:
+            bw2 = random.randint(8, 15)
+            bc = lighten(t['book_a'], random.randint(0, 50)) if random.random() > 0.5 else t['book_b']
+            bx2 = min(bx + bw2, BSH_X1 - 4)
+            d.rectangle([(bx, sy0 + 6), (bx2, sy1 - 7)], fill=bc)
+            d.line([(bx + 2, sy0 + 8), (bx + 2, sy1 - 9)],
+                   fill=lighten(bc, 45), width=1)
+            bx = bx2 + 2
 
-    # Texture: subtle horizontal lines on top wall
-    for y in range(4, TILE, 6):
-        draw.line([(0, y), (W, y)], fill=accent, width=1)
+    # ── 6. Banners (left wall, rows 3-14) ────────────────────────────────────
+    banner_c  = t['banner']
+    banner_d  = darken(banner_c, 35)
+    banner_hi = lighten(banner_c, 30)
+    bw2, bh2  = 26, 46
+    for by_start in [ty(3) + 8, ty(8) + 8, ty(12) + 8]:
+        bx5 = tx(1) + 4
+        d.rectangle([(bx5, by_start), (bx5 + bw2, by_start + bh2)], fill=banner_c)
+        d.rectangle([(bx5, by_start), (bx5 + bw2, by_start + bh2)],
+                    outline=banner_d, width=2)
+        d.rectangle([(bx5 + 4, by_start + 4), (bx5 + bw2 - 4, by_start + bh2 - 4)],
+                    outline=banner_hi, width=1)
+        mx5 = bx5 + bw2 // 2
+        my5 = by_start + bh2 // 2
+        d.line([(mx5, by_start + 8), (mx5, by_start + bh2 - 8)], fill=banner_d, width=2)
+        d.line([(bx5 + 8, my5), (bx5 + bw2 - 8, my5)], fill=banner_d, width=2)
+        for ddx, ddy in [(4, 4), (4, -4), (-4, 4), (-4, -4)]:
+            d.ellipse([(mx5 + ddx - 2, my5 + ddy - 2),
+                       (mx5 + ddx + 2, my5 + ddy + 2)], fill=banner_d)
 
-    # Texture: subtle lines on left wall
-    for y in range(TILE + 4, H - TILE, 8):
-        draw.line([(0, y), (TILE, y)], fill=accent, width=1)
+    # ── 7. Portal door (bottom center, cols 11-13) ────────────────────────────
+    PX0, PX1 = tx(11), tx(14)
+    PY0, PY1 = ty(15), H
+    PCX      = (PX0 + PX1) // 2
+    PIL_W2   = 10
+    pg       = t['portal_g']
 
-    # Texture: subtle lines on right wall
-    for y in range(TILE + 4, H - TILE, 8):
-        draw.line([(W - TILE, y), (W, y)], fill=accent, width=1)
-
-
-def draw_podium(draw, theme):
-    """Draw podium area: rows 1-2 (y=32 to y=96), raised platform, crystal in center."""
-    podium = theme["podium_base"]
-    trim = theme["podium_trim"]
-    crystal = theme["crystal"]
-
-    # Raised platform full width
-    podium_light = lighten(podium, 15)
-    draw.rectangle([TILE, TILE, W - TILE, TILE * 3], fill=podium_light)
-
-    # Shadow on left side to give raised look
-    draw.rectangle([TILE, TILE, TILE + 4, TILE * 3], fill=darken(podium, 20))
-
-    # Trim line at bottom of podium
-    draw.rectangle([TILE, TILE * 3 - 2, W - TILE, TILE * 3], fill=trim)
-
-    # Step edge (darker strip just below the trim inside)
-    draw.rectangle([TILE, TILE, W - TILE, TILE + 3], fill=darken(podium, 25))
-
-    # Crystal/symbol in center at x=400, y=64
-    cx, cy = 400, 64
-    # Outer glow
-    draw.ellipse([cx - 14, cy - 14, cx + 14, cy + 14], fill=darken(crystal, 40))
-    # Crystal body
-    draw.ellipse([cx - 10, cy - 10, cx + 10, cy + 10], fill=crystal)
-    # Highlight
-    draw.ellipse([cx - 5, cy - 7, cx + 2, cy - 2], fill=lighten(crystal, 60))
-
-    # Small decorative dots along trim
-    for x in range(TILE + 16, W - TILE, 48):
-        draw.ellipse([x - 3, TILE * 3 - 6, x + 3, TILE * 3], fill=trim)
-
-
-def draw_bookshelves(draw, theme):
-    """Draw bookshelves on right wall area (x=672-768, y=96-512)."""
-    shelf_bg = darken(theme["wall"], 15)
-    spine_a = theme["book_spine_a"]
-    spine_b = theme["book_spine_b"]
-
-    # Shelf background
-    draw.rectangle([672, 96, 768, 512], fill=shelf_bg)
-
-    # Draw shelf boards and book spines
-    shelf_y_positions = list(range(96, 512, 52))
-    for sy in shelf_y_positions:
-        if sy + 48 > 512:
-            break
-        # Shelf board (horizontal strip)
-        draw.rectangle([672, sy + 44, 768, sy + 48], fill=lighten(shelf_bg, 30))
-        # Book spines between shelf boards
-        x = 676
-        toggle = True
-        while x < 764:
-            book_w = 8 + (4 if toggle else 0)
-            color = spine_a if toggle else spine_b
-            draw.rectangle([x, sy + 4, x + book_w - 1, sy + 43], fill=color)
-            # Book highlight
-            draw.rectangle([x, sy + 4, x + 2, sy + 43], fill=lighten(color, 30))
-            x += book_w + 2
-            toggle = not toggle
-
-    # Shelf side borders
-    draw.rectangle([672, 96, 676, 512], fill=darken(shelf_bg, 20))
-    draw.rectangle([764, 96, 768, 512], fill=darken(shelf_bg, 20))
-
-
-def draw_banners(draw, theme):
-    """Draw 2-3 banners on left wall area (x=32-96, y=96-512)."""
-    banner = theme["banner"]
-    border = darken(banner, 40)
-
-    banner_defs = [
-        (48, 112, 80, 220),
-        (48, 240, 80, 348),
-        (48, 368, 80, 476),
+    # Arch
+    AARCH_TOP = PY0 - 18
+    arch_pts2 = [
+        (PX0, PY0), (PX0 + PIL_W2, PY0),
+        (PCX - 6, AARCH_TOP + 6), (PCX, AARCH_TOP),
+        (PCX + 6, AARCH_TOP + 6),
+        (PX1 - PIL_W2, PY0), (PX1, PY0),
     ]
+    # Pillars
+    d.rectangle([(PX0, PY0), (PX0 + PIL_W2, PY1)], fill=darken(t['wall_top'], 10))
+    d.rectangle([(PX1 - PIL_W2, PY0), (PX1, PY1)], fill=darken(t['wall_top'], 10))
+    d.polygon(arch_pts2, fill=t['wall_top'])
+    d.line(arch_pts2 + [arch_pts2[0]], fill=lighten(t['wall_top'], 18), width=1)
+    d.polygon([(PCX - 4, AARCH_TOP + 4), (PCX + 4, AARCH_TOP + 4),
+               (PCX + 3, AARCH_TOP + 12), (PCX - 3, AARCH_TOP + 12)], fill=GOLD)
 
-    for bx1, by1, bx2, by2 in banner_defs:
-        # Banner background
-        draw.rectangle([bx1, by1, bx2, by2], fill=banner)
-        # Border
-        draw.rectangle([bx1, by1, bx2, by2], outline=border, width=2)
-        # Inner decorative line
-        draw.rectangle([bx1 + 4, by1 + 4, bx2 - 4, by2 - 4], outline=lighten(banner, 30), width=1)
-        # Center symbol (simple cross)
-        mx = (bx1 + bx2) // 2
-        my = (by1 + by2) // 2
-        draw.line([(mx, by1 + 8), (mx, by2 - 8)], fill=border, width=2)
-        draw.line([(bx1 + 8, my), (bx2 - 8, my)], fill=border, width=2)
-        # Corner dots
-        for dx, dy in [(4, 4), (4, -4), (-4, 4), (-4, -4)]:
-            draw.ellipse([mx + dx - 2, my + dy - 2, mx + dx + 2, my + dy + 2], fill=border)
+    # Portal glow interior
+    GX0, GX1 = PX0 + PIL_W2, PX1 - PIL_W2
+    dark_pg = darken(pg, 50)
+    d.rectangle([(GX0, PY0), (GX1, PY1)], fill=dark_pg)
+    for ri in range(6, 32, 6):
+        a5 = 1.0 - ri / 32.0
+        gc5 = blend(dark_pg, pg, a5)
+        mid5x = (GX0 + GX1) // 2
+        mid5y = (PY0 + PY1) // 2
+        d.ellipse([(mid5x - ri, mid5y - ri), (mid5x + ri, mid5y + ri)],
+                  outline=gc5, width=1)
+    mid5x = (GX0 + GX1) // 2
+    mid5y = (PY0 + PY1) // 2
+    d.ellipse([(mid5x - 16, mid5y - 16), (mid5x + 16, mid5y + 16)], fill=pg)
+    d.ellipse([(mid5x - 6, mid5y - 6), (mid5x + 6, mid5y + 6)],
+              fill=lighten(pg, 60))
 
+    # ── 8. Study tables (4 positions) ────────────────────────────────────────
+    for col6, row6 in [(5, 6), (18, 6), (5, 12), (18, 12)]:
+        cx6 = tx(col6) + TILE // 2
+        cy6 = ty(row6) + TILE // 2
+        R6  = 24
+        d.ellipse([(cx6 - R6 + 4, cy6 - R6 // 2 + 6), (cx6 + R6 + 4, cy6 + R6 // 2 + 6)],
+                  fill=darken(t['wood'], 30))
+        d.ellipse([(cx6 - R6, cy6 - R6 // 2), (cx6 + R6, cy6 + R6 // 2)],
+                  fill=t['wood'])
+        d.ellipse([(cx6 - R6 + 3, cy6 - R6 // 2 + 2), (cx6 + R6 - 3, cy6 + R6 // 2 - 2)],
+                  fill=lighten(t['wood'], 22))
+        d.ellipse([(cx6 - R6, cy6 - R6 // 2), (cx6 + R6, cy6 + R6 // 2)],
+                  outline=darken(t['wood'], 28), width=1)
 
-def draw_carpet(draw, theme):
-    """Draw duel carpet from (128,192) to (672,384) with border and corner gems."""
-    carpet = theme["carpet"]
-    border_c = theme["carpet_border"]
-    crystal = theme["crystal"]
+    # ── 9. HUD bar ───────────────────────────────────────────────────────────
+    draw_hud_bar(d)
 
-    # Main carpet fill
-    draw.rectangle([128, 192, 672, 384], fill=carpet)
-
-    # Border (4px)
-    draw.rectangle([128, 192, 672, 384], outline=border_c, width=4)
-
-    # Inner border line for depth
-    draw.rectangle([134, 198, 666, 378], outline=lighten(carpet, 25), width=1)
-
-    # Center decorative pattern - diamond outline
-    cx, cy = 400, 288
-    diamond_size = 60
-    pts = [
-        (cx, cy - diamond_size),
-        (cx + diamond_size, cy),
-        (cx, cy + diamond_size),
-        (cx - diamond_size, cy),
-    ]
-    draw.polygon(pts, outline=border_c, fill=None)
-    # Inner diamond
-    s2 = diamond_size // 2
-    pts2 = [
-        (cx, cy - s2),
-        (cx + s2, cy),
-        (cx, cy + s2),
-        (cx - s2, cy),
-    ]
-    draw.polygon(pts2, outline=lighten(carpet, 35), fill=None)
-
-    # Corner gems at carpet corners
-    gem_positions = [(128, 192), (672, 192), (128, 384), (672, 384)]
-    for gx, gy in gem_positions:
-        draw.ellipse([gx - 6, gy - 6, gx + 6, gy + 6], fill=darken(crystal, 20))
-        draw.ellipse([gx - 4, gy - 4, gx + 4, gy + 4], fill=crystal)
-        draw.ellipse([gx - 2, gy - 4, gx + 1, gy - 1], fill=lighten(crystal, 50))
-
-
-def draw_tables(draw, theme):
-    """Draw 4 study tables as circles at specified positions."""
-    table = theme["table"]
-    positions = [(160, 224), (608, 224), (160, 384), (608, 384)]
-
-    for tx, ty in positions:
-        # Shadow
-        draw.ellipse([tx - 22, ty - 18, tx + 22, ty + 26], fill=darken(table, 40))
-        # Table body (outer circle)
-        draw.ellipse([tx - 22, ty - 22, tx + 22, ty + 22], fill=table)
-        # Table top (lighter inner circle for 3D look)
-        draw.ellipse([tx - 16, ty - 16, tx + 16, ty + 16], fill=lighten(table, 25))
-        # Highlight
-        draw.ellipse([tx - 10, ty - 14, tx, ty - 6], fill=lighten(table, 50))
-        # Rim edge
-        draw.ellipse([tx - 22, ty - 22, tx + 22, ty + 22], outline=darken(table, 30), width=2)
-
-
-def draw_portal_door(draw, theme):
-    """Draw portal door at bottom center (x=352-448, y=512-576)."""
-    shimmer = theme["door_shimmer"]
-    wall = theme["wall"]
-
-    # Stone arch border - draw arch frame
-    arch_x1, arch_y1, arch_x2, arch_y2 = 352, 512, 448, 576
-    arch_color = darken(wall, 10)
-
-    # Left and right stone pillars
-    draw.rectangle([arch_x1, arch_y1, arch_x1 + 8, arch_y2], fill=arch_color)
-    draw.rectangle([arch_x2 - 8, arch_y1, arch_x2, arch_y2], fill=arch_color)
-
-    # Top arch keystone area
-    draw.rectangle([arch_x1, arch_y1, arch_x2, arch_y1 + 10], fill=arch_color)
-
-    # Dark interior of arch
-    draw.rectangle([arch_x1 + 8, arch_y1 + 10, arch_x2 - 8, arch_y2], fill=(10, 8, 16))
-
-    # Shimmer/glow oval inside the arch
-    glow_cx = (arch_x1 + arch_x2) // 2
-    glow_cy = (arch_y1 + 10 + arch_y2) // 2
-    gw, gh = 28, 20
-    # Outer glow
-    draw.ellipse([glow_cx - gw, glow_cy - gh, glow_cx + gw, glow_cy + gh],
-                 fill=darken(shimmer, 60))
-    # Inner shimmer
-    draw.ellipse([glow_cx - gw + 6, glow_cy - gh + 4, glow_cx + gw - 6, glow_cy + gh - 4],
-                 fill=shimmer)
-    # Bright center
-    draw.ellipse([glow_cx - 6, glow_cy - 4, glow_cx + 6, glow_cy + 4],
-                 fill=lighten(shimmer, 60))
-
-    # Stone arch trim lines
-    draw.rectangle([arch_x1, arch_y1, arch_x2, arch_y2], outline=lighten(arch_color, 20), width=1)
-
-
-def draw_hud_strip(img):
-    """Draw semi-transparent dark rectangle at top (0,0 to 800,32) for UI overlay."""
-    # Create RGBA overlay
-    overlay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    ov_draw = ImageDraw.Draw(overlay)
-    ov_draw.rectangle([0, 0, W, TILE], fill=(0, 0, 0, 100))
-
-    # Composite onto image
-    img_rgba = img.convert("RGBA")
-    result = Image.alpha_composite(img_rgba, overlay)
-    return result.convert("RGB")
-
-
-def generate_club(name, theme, output_dir):
-    """Generate a single club background image."""
-    img = Image.new("RGB", (W, H), theme["floor"])
-    draw = ImageDraw.Draw(img)
-
-    # Draw in order: back to front
-    draw_floor(draw, theme)
-    draw_walls(draw, theme)
-    draw_podium(draw, theme)
-    draw_bookshelves(draw, theme)
-    draw_banners(draw, theme)
-    draw_carpet(draw, theme)
-    draw_tables(draw, theme)
-    draw_portal_door(draw, theme)
-
-    # HUD strip (alpha composite)
-    img = draw_hud_strip(img)
-
-    # Save
-    out_path = os.path.join(output_dir, theme["filename"])
+    # ── Save ──────────────────────────────────────────────────────────────────
+    out_path = os.path.join(OUTPUT_DIR, t['filename'])
     img.save(out_path)
-    print("Saved: " + out_path)
+    print(f'  Saved: {t["filename"]} ({t["desc"]})')
 
 
 def main():
-    print("Generating MTG club background images...")
-    print("Output directory: " + OUTPUT_DIR)
-
-    # Ensure output directory exists
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-    for name, theme in THEMES.items():
-        print("Generating " + name.upper() + " club...")
-        generate_club(name, theme, OUTPUT_DIR)
-
-    print("")
-    print("All 5 club backgrounds generated successfully!")
-
-    # Verify files exist
-    print("")
-    print("Verifying output files:")
-    all_ok = True
-    for name, theme in THEMES.items():
-        path = os.path.join(OUTPUT_DIR, theme["filename"])
-        if os.path.exists(path):
-            size = os.path.getsize(path)
-            print("  OK: " + theme["filename"] + " (" + str(size) + " bytes)")
-        else:
-            print("  MISSING: " + theme["filename"])
-            all_ok = False
-
-    if all_ok:
-        print("")
-        print("All files verified!")
-    else:
-        print("")
-        print("ERROR: Some files are missing!")
-        raise SystemExit(1)
+    print('Generating club backgrounds...')
+    for name, t in THEMES.items():
+        generate_club(name, t)
+    print('Done — 5 clubs generated.')
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

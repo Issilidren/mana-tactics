@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import Phaser from 'phaser'
 import gameConfig from './index.js'
 
-export default function PhaserGame({ user, playerDeck, onBattleStart, onStarterPicked, onShopOpen, onExitGame, onGameReady }) {
+export default function PhaserGame({ user, playerDeck, onBattleStart, onStarterPicked, onShopOpen, onPlayerRest, onExitGame, onGameReady }) {
   const containerRef = useRef(null)
   const gameRef = useRef(null)
 
@@ -34,6 +34,7 @@ export default function PhaserGame({ user, playerDeck, onBattleStart, onStarterP
     game.events.on('battleStart',    (npcData) => { if (onBattleStart)    onBattleStart(npcData) })
     game.events.on('starterPicked',  (data)    => { if (onStarterPicked)  onStarterPicked(data) })
     game.events.on('shopOpen',       ()        => { if (onShopOpen)       onShopOpen() })
+    game.events.on('playerRest',     ()        => { if (onPlayerRest)     onPlayerRest() })
 
     if (onGameReady) onGameReady(game)
 
@@ -41,6 +42,7 @@ export default function PhaserGame({ user, playerDeck, onBattleStart, onStarterP
       game.events.off('battleStart')
       game.events.off('starterPicked')
       game.events.off('shopOpen')
+      game.events.off('playerRest')
       game.destroy(true)
       gameRef.current = null
     }

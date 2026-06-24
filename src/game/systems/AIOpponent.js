@@ -2,8 +2,9 @@
 import { getManaCost } from './CardEngine.js'
 
 export class AIOpponent {
-  constructor(engine) {
+  constructor(engine, difficulty = 'normal') {
     this.engine = engine
+    this.difficulty = difficulty
   }
 
   // Returns a sequence of action objects for the AI's full turn
@@ -163,6 +164,12 @@ export class AIOpponent {
       const myPow = slot.card.power
       const myTough = slot.card.toughness
 
+      // Easy: only attack when player has no blockers at all
+      if (this.difficulty === 'easy') {
+        if (player.battlefield.length === 0) attackerIndices.push(i)
+        continue
+      }
+
       // Always attack if player has no blockers
       if (player.battlefield.length === 0) {
         attackerIndices.push(i)
@@ -203,6 +210,17 @@ export class AIOpponent {
         // Player is near death — attack with everything
         attackerIndices.push(i)
       }
+    }
+
+    // Hard: hold back one creature as emergency blocker if AI life is low
+    if (this.difficulty === 'hard' && ai.life <= 5 && attackerIndices.length > 1) {
+      // Remove the weakest attacker (lowest power) from attack squad
+      const weakestIdx = attackerIndices.reduce((worst, idx) => {
+        const wSlot = ai.battlefield[worst]
+        const cSlot = ai.battlefield[idx]
+        return (cSlot?.card?.power ?? 0) < (wSlot?.card?.power ?? 0) ? idx : worst
+      }, attackerIndices[0])
+      return attackerIndices.filter(idx => idx !== weakestIdx)
     }
 
     return attackerIndices
@@ -256,10 +274,11 @@ export class AIOpponent {
         const bSlot = ai.battlefield[bi]
         if (!bSlot || bSlot.card.type !== 'creature') continue
 
-        // Flying check
+        // Flying check — reach can also block flying
         if (hasFlying) {
           const bFlying = bSlot.card.abilities && bSlot.card.abilities.includes('flying')
-          if (!bFlying) continue
+          const bReach  = bSlot.card.abilities && bSlot.card.abilities.includes('reach')
+          if (!bFlying && !bReach) continue
         }
 
         const bPow = bSlot.card.power

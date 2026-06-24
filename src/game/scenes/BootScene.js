@@ -23,6 +23,7 @@ export default class BootScene extends Phaser.Scene {
     this.load.image('club-black-bg', 'assets/club-black-bg.png')
     this.load.image('club-red-bg',   'assets/club-red-bg.png')
     this.load.image('club-green-bg', 'assets/club-green-bg.png')
+    this.load.image('archives-bg',   'assets/archives-bg.png')
 
     // Character sprites
     this.load.image('player',        'assets/sprites/player.png')
@@ -33,6 +34,7 @@ export default class BootScene extends Phaser.Scene {
     this.load.image('npc-green',     'assets/sprites/npc-green.png')
     this.load.image('npc-librarian', 'assets/sprites/npc-librarian.png')
     this.load.image('npc-merchant',  'assets/sprites/npc-merchant.png')
+    this.load.image('npc-caretaker', 'assets/sprites/npc-caretaker.png')
   }
 
   create() {

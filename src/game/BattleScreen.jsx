@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { CardEngine, getManaCost } from './systems/CardEngine.js'
 import { AIOpponent } from './systems/AIOpponent.js'
+import { SoundEngine } from './systems/SoundEngine.js'
 
 // ── PTCG-style card frame colors per MTG color ──────────────────────────────
 const CARD_FRAME = {
@@ -183,6 +184,14 @@ function BattleCard({
             -{damage}
           </div>
         )}
+        {isAttacking && abilities.some(a => a.toLowerCase() === 'vigilance') && (
+          <div style={{ position: 'absolute', top: 2, left: 2,
+            background: 'rgba(210,172,55,0.9)', borderRadius: 2,
+            padding: '1px 3px', fontSize: '0.44rem', color: '#1a1a1a', fontWeight: 'bold',
+          }}>
+            ⚔ VIGIL
+          </div>
+        )}
       </div>
 
       {/* ── Type bar ── */}
@@ -201,6 +210,28 @@ function BattleCard({
       }}>
         {card.type}{abilities.length > 0 ? ` · ${abilities[0]}` : ''}
       </div>
+
+      {/* ── Keyword pills (battlefield only) ── */}
+      {size === 'battlefield' && abilities.length > 0 && (
+        <div style={{ display: 'flex', gap: 2, padding: '1px 3px', flexWrap: 'wrap', flexShrink: 0,
+          borderBottom: `1px solid ${frame.border}22` }}>
+          {abilities.slice(0, 3).map(ab => {
+            const abLow = ab.toLowerCase().replace(/_/g, ' ')
+            const pilBg = ['trample','flying','first strike','double strike','haste','menace'].includes(abLow)
+              ? '#5C1A1A'
+              : ['lifelink','deathtouch','vigilance','indestructible'].includes(abLow)
+                ? '#1A4A1A'
+                : '#1A2A5A'
+            return (
+              <span key={ab} style={{ background: pilBg, color: '#DDD', fontSize: '0.36rem',
+                padding: '0 2px', borderRadius: 2, letterSpacing: 0.2,
+                textTransform: 'uppercase', fontWeight: 'bold', lineHeight: 1.4 }}>
+                {abLow}
+              </span>
+            )
+          })}
+        </div>
+      )}
 
       {/* ── Text + stats area ── */}
       <div style={{
@@ -447,7 +478,7 @@ function CardTooltip({ card, rect }) {
 }
 
 // ── Battlefield row ──────────────────────────────────────────────────────────
-function Battlefield({ slots, label, selectedIdx, onSlotClick, attackingIndices = [], isFlipped = false, onCardHover }) {
+function Battlefield({ slots, label, selectedIdx, onSlotClick, attackingIndices = [], isFlipped = false, onCardHover, newCardIdx = null }) {
   return (
     <div style={{
       flex: 1,
@@ -478,7 +509,8 @@ function Battlefield({ slots, label, selectedIdx, onSlotClick, attackingIndices 
           <div style={{ color: '#2A4060', fontSize: '0.72rem', fontStyle: 'italic' }}>— empty —</div>
         )}
         {slots.map((slot, i) => (
-          <div key={i} style={{ transform: isFlipped ? 'scaleY(-1)' : 'none' }}>
+          <div key={i} style={{ transform: isFlipped ? 'scaleY(-1)' : 'none',
+            animation: newCardIdx === i ? 'cardEnterField 0.38s ease-out' : undefined }}>
             <BattleCard
               card={slot.card}
               tapped={slot.tapped}
@@ -545,6 +577,10 @@ function GameLog({ log }) {
 
 // ── Win/Loss Overlay ─────────────────────────────────────────────────────────
 function ResultOverlay({ winner, reward, npcName, onContinue, onRematch, onRetreat }) {
+  useEffect(() => {
+    if (winner === 'player') SoundEngine.victory()
+    else SoundEngine.defeat()
+  }, [])
   const won = winner === 'player'
   return (
     <div style={{
@@ -739,7 +775,7 @@ function SearchModal({ library, wishCards, onPickLibrary, onPickWish, onSkip }) 
 
 // ── Main BattleScreen component ───────────────────────────────────────────────
 export default function BattleScreen({ npcData, playerDeck, userProgress, onBattleEnd }) {
-  const { npcName = 'Opponent', color = 'colorless', deckType = 'colorless', reward = 50 } = npcData || {}
+  const { npcName = 'Opponent', color = 'colorless', deckType = 'colorless', reward = 50, difficulty = 'normal' } = npcData || {}
 
   const engineRef = useRef(null)
   const aiRef = useRef(null)
@@ -749,6 +785,10 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
   const [selectedBfIdx, setSelectedBfIdx] = useState(null)
   const [pendingAttackers, setPendingAttackers] = useState([])
   const [selectingAttackers, setSelectingAttackers] = useState(false)
+  const [blockingPhase, setBlockingPhase] = useState(false)
+  const [pendingBlockerSrcIdx, setPendingBlockerSrcIdx] = useState(null)
+  const [assignedBlockers, setAssignedBlockers] = useState({})
+  const blockingResumeRef = useRef(null)
   const [aiThinking, setAiThinking] = useState(false)
   const [message, setMessage] = useState('')
   const [hoveredCard, setHoveredCard] = useState(null) // { card, rect }
@@ -756,6 +796,10 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
   const [instantWindow, setInstantWindow] = useState(false)
   const [pendingETB, setPendingETB] = useState(null) // { card, effect }
   const [pendingAiActions, setPendingAiActions] = useState(null) // { actions, nextIdx }
+  const [healPops, setHealPops] = useState([]) // { id, who, amount }
+  const healPopIdRef = useRef(0)
+  const [newCardAnimIdx, setNewCardAnimIdx] = useState(null)
+  const [muted, setMuted] = useState(false)
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -774,14 +818,20 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
     setHoveredCard(card ? { card, rect } : null)
   }
 
+  function handleToggleMute() {
+    const nowMuted = SoundEngine.toggleMute()
+    setMuted(nowMuted)
+  }
+
   // ── Initialize engine on mount ───────────────────────────────────────────────
   useEffect(() => {
+    SoundEngine.startBGM('battle')
     import('./data/aiDecks.js').then(({ AI_DECKS }) => {
       const aiDeckDef = AI_DECKS[deckType] || AI_DECKS.colorless
       const tutorial = npcData?.tutorial || false
       const engine = new CardEngine(playerDeck, aiDeckDef.cards, color, tutorial)
       engineRef.current = engine
-      aiRef.current = new AIOpponent(engine)
+      aiRef.current = new AIOpponent(engine, difficulty)
 
       for (let i = 0; i < 5; i++) engine.drawCard('player')
       for (let i = 0; i < 5; i++) engine.drawCard('ai')
@@ -791,6 +841,7 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
 
       syncState()
     })
+    return () => SoundEngine.stopBGM()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Player action handlers ───────────────────────────────────────────────────
@@ -800,9 +851,10 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
     if (aiThinking) return
     const card = gameState.player.hand[i]
     if (!card) return
-    // During instant window: only allow instants
+    // During instant window: allow instants and flash creatures
     if (instantWindow) {
-      if (card.type !== 'instant') return showMessage('You can only cast instants right now — or press PASS')
+      const isFlash = card.type === 'creature' && card.abilities?.includes('flash')
+      if (card.type !== 'instant' && !isFlash) return showMessage('You can only cast instants or Flash creatures right now — or press PASS')
     } else {
       if (gameState.activePlayer !== 'player') return
       if (gameState.phase !== 'main') return
@@ -859,6 +911,7 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
 
     const result = engineRef.current.castCreature('player', selectedHandIdx)
     if (!result.ok) return showMessage(result.error)
+    SoundEngine.cardPlay()
 
     if (result.needsETBTarget) {
       setPendingETB(result.needsETBTarget)
@@ -867,6 +920,12 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
     setSelectedHandIdx(null)
     setSelectedBfIdx(null)
     syncState()
+    // Animate the newly placed card
+    const newIdx = engineRef.current.state.player.battlefield.length - 1
+    if (newIdx >= 0) {
+      setNewCardAnimIdx(newIdx)
+      setTimeout(() => setNewCardAnimIdx(null), 450)
+    }
   }
 
   function handleCastSpell(targetType = 'player', targetIdx = -1) {
@@ -878,6 +937,7 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
 
     const result = engineRef.current.castSpell('player', selectedHandIdx, targetIdx, targetType)
     if (!result.ok) return showMessage(result.error)
+    SoundEngine.spellCast()
 
     setSelectedHandIdx(null)
     setSelectedBfIdx(null)
@@ -917,9 +977,19 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
     if (gameState.phase === 'main' && selectedHandIdx !== null) {
       const card = gameState.player.hand[selectedHandIdx]
       if (card && (card.type === 'instant' || card.type === 'sorcery' || card.type === 'spell')) {
-        handleCastSpell('creature', i)
+        handleCastSpell('own_creature', i)
         return
       }
+    }
+
+    // Blocking phase — click own creature to select it as a blocker
+    if (blockingPhase) {
+      const slot = gameState.player.battlefield[i]
+      if (!slot || slot.card.type !== 'creature' || slot.summoningSick) {
+        return showMessage('That creature cannot block')
+      }
+      setPendingBlockerSrcIdx(prev => prev === i ? null : i)
+      return
     }
 
     // Tap to activate ability: main phase, player's turn, no spell selected, not selecting attackers
@@ -954,6 +1024,34 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
       return
     }
 
+    // Blocking phase — click AI attacker to assign the selected blocker
+    if (blockingPhase) {
+      if (pendingBlockerSrcIdx === null) {
+        return showMessage('Click one of your creatures first to select a blocker')
+      }
+      const isAttacker = gameState.attackers?.includes(i)
+      if (!isAttacker) {
+        return showMessage('Click one of the attacking creatures to assign your blocker')
+      }
+      // Reach check: flying attackers can only be blocked by flying or reach creatures
+      const attacker = gameState.ai.battlefield[i]
+      const blocker  = gameState.player.battlefield[pendingBlockerSrcIdx]
+      if (attacker && blocker && attacker.card.abilities?.includes('flying')) {
+        const canBlock = blocker.card.abilities?.includes('flying') || blocker.card.abilities?.includes('reach')
+        if (!canBlock) return showMessage(`${blocker.card.name} can't block ${attacker.card.name} — needs Flying or Reach`)
+      }
+      setAssignedBlockers(prev => {
+        const next = { ...prev }
+        for (const k of Object.keys(next)) {
+          if (next[k] === pendingBlockerSrcIdx) delete next[k]
+        }
+        next[i] = pendingBlockerSrcIdx
+        return next
+      })
+      setPendingBlockerSrcIdx(null)
+      return
+    }
+
     const isMain = gameState.phase === 'main' && gameState.activePlayer === 'player'
     if (!isMain && !instantWindow) return
     if (selectedHandIdx === null) return
@@ -983,7 +1081,15 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
 
     const blockerMap = aiRef.current.chooseBlockers(engineRef.current.state)
     engineRef.current.declareBlockers(blockerMap)
-    engineRef.current.resolveCombat()
+    const combatResult = engineRef.current.resolveCombat()
+    SoundEngine.attackHit()
+    if (combatResult?.lifelinkHeals?.length) {
+      combatResult.lifelinkHeals.forEach(({ who, amount }) => {
+        const id = ++healPopIdRef.current
+        setHealPops(prev => [...prev, { id, who, amount }])
+        setTimeout(() => setHealPops(prev => prev.filter(p => p.id !== id)), 1400)
+      })
+    }
     syncState()
 
     if (engineRef.current.state.winner) {
@@ -1065,7 +1171,7 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
     // Before AI spell/creature: give player a respond window if they have instants
     if (!playerPassedPriority &&
         (action.type === 'castSpell' || action.type === 'castCreature') &&
-        engineRef.current.state.player.hand.some(c => c.type === 'instant')) {
+        engineRef.current.state.player.hand.some(c => c.type === 'instant' || (c.type === 'creature' && c.abilities?.includes('flash')))) {
       setPendingAiActions({ actions, nextIdx: idx })
       setAiThinking(false)
       setInstantWindow(true)
@@ -1084,10 +1190,14 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
           engine.castSpell('ai', action.handIndex, action.targetIndex, action.targetType)
         } else if (action.type === 'attack') {
           engine.declareAttackers(action.attackerIndices)
-
-          const blockerMap = autoPlayerBlock(engine.state)
-          engine.declareBlockers(blockerMap)
-          engine.resolveCombat()
+          // Pause for player to declare blockers
+          blockingResumeRef.current = { actions, nextIdx: idx + 1 }
+          setAssignedBlockers({})
+          setPendingBlockerSrcIdx(null)
+          setBlockingPhase(true)
+          setAiThinking(false)
+          syncState()
+          return
         }
       } catch (e) {
         console.warn('AI action failed:', e.message)
@@ -1102,6 +1212,35 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
 
       executeAiActions(actions, idx + 1)
     }, 700)
+  }
+
+  function handleDoneBlocking() {
+    const engine = engineRef.current
+    engine.declareBlockers(assignedBlockers)
+    const aiCombatResult = engine.resolveCombat()
+    SoundEngine.attackHit()
+    if (aiCombatResult?.lifelinkHeals?.length) {
+      SoundEngine.lifelinkHeal()
+      aiCombatResult.lifelinkHeals.forEach(({ who, amount }) => {
+        const id = ++healPopIdRef.current
+        setHealPops(prev => [...prev, { id, who, amount }])
+        setTimeout(() => setHealPops(prev => prev.filter(p => p.id !== id)), 1400)
+      })
+    }
+    setBlockingPhase(false)
+    setPendingBlockerSrcIdx(null)
+    setAssignedBlockers({})
+    syncState()
+    if (engine.state.winner) {
+      setAiThinking(false)
+      return
+    }
+    const resume = blockingResumeRef.current
+    blockingResumeRef.current = null
+    if (resume) {
+      setAiThinking(true)
+      executeAiActions(resume.actions, resume.nextIdx)
+    }
   }
 
   function autoPlayerBlock(state) {
@@ -1191,6 +1330,25 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
       overflow: 'hidden',
       zIndex: 50,
     }}>
+      {/* ── Lifelink heal pops ── */}
+      {healPops.map(({ id, who, amount }) => (
+        <div key={id} style={{
+          position: 'absolute',
+          left: who === 'player' ? '12%' : '62%',
+          top: '18%',
+          color: '#44DD88',
+          fontSize: '1.1rem',
+          fontWeight: 'bold',
+          fontFamily: 'monospace',
+          textShadow: '0 0 8px #22AA66, 1px 1px 0 #000',
+          pointerEvents: 'none',
+          animation: 'lifelinkPop 1.4s ease-out forwards',
+          zIndex: 400,
+        }}>
+          +{amount} ❤
+        </div>
+      ))}
+
       {/* Hover tooltip — rendered at fixed position above everything */}
       {hoveredCard && (
         <CardTooltip card={hoveredCard.card} rect={hoveredCard.rect} />
@@ -1229,7 +1387,7 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
               const aiDeckDef = AI_DECKS[deckType] || AI_DECKS.colorless
               const engine = new CardEngine(playerDeck, aiDeckDef.cards, color, npcData?.tutorial || false)
               engineRef.current = engine
-              aiRef.current = new AIOpponent(engine)
+              aiRef.current = new AIOpponent(engine, difficulty)
               for (let i = 0; i < 5; i++) engine.drawCard('player')
               for (let i = 0; i < 5; i++) engine.drawCard('ai')
               engine.state.phase = 'main'
@@ -1296,6 +1454,21 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
         <span style={{ marginLeft: 'auto', color: '#506880', fontSize: '0.7rem' }}>
           TURN <span style={{ color: '#B0C8E8' }}>{turn}</span>
         </span>
+        <button
+          onClick={handleToggleMute}
+          title={muted ? 'Unmute' : 'Mute'}
+          style={{
+            background: 'none',
+            border: '1px solid ' + (muted ? '#506880' : '#D4AF37'),
+            borderRadius: 3,
+            color: muted ? '#506880' : '#D4AF37',
+            fontSize: '0.82rem',
+            padding: '1px 7px',
+            cursor: 'pointer',
+            lineHeight: 1.4,
+            flexShrink: 0,
+          }}
+        >{muted ? '\uD83D\uDD07' : '\uD83D\uDD0A'}</button>
         {aiThinking && (
           <span style={{ color: '#88DDFF', fontSize: '0.7rem', animation: 'pulse 1s infinite' }}>
             ▶ AI...
@@ -1315,7 +1488,8 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
           slots={ai.battlefield}
           label="AI Battlefield"
           selectedIdx={null}
-          onSlotClick={(isPlayerTurn && selectedHandIdx !== null) || pendingETB || (instantWindow && selectedHandIdx !== null) ? handleAiBfClick : null}
+          onSlotClick={(isPlayerTurn && selectedHandIdx !== null) || pendingETB || (instantWindow && selectedHandIdx !== null) || blockingPhase ? handleAiBfClick : null}
+          attackingIndices={blockingPhase ? (gameState?.attackers ?? []) : []}
           isFlipped={false}
           onCardHover={handleCardHover}
         />
@@ -1330,6 +1504,46 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
         borderBottom: '1px solid #285080',
       }} />
 
+      {/* ── BLOCK PHASE BANNER ── */}
+      {blockingPhase && (
+        <div style={{
+          background: 'rgba(55,18,90,0.95)',
+          borderTop: '2px solid #9955DD',
+          borderBottom: '2px solid #9955DD',
+          padding: '5px 14px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          flexShrink: 0,
+        }}>
+          <span style={{ color: '#CC88FF', fontFamily: "'Cinzel', serif", fontSize: '0.72rem', fontWeight: 'bold', letterSpacing: 2, whiteSpace: 'nowrap' }}>
+            ⚔ BLOCK PHASE
+          </span>
+          <span style={{ color: '#AA88CC', fontFamily: "'Courier New', monospace", fontSize: '0.62rem', flex: 1 }}>
+            {pendingBlockerSrcIdx !== null
+              ? `${gameState?.player?.battlefield[pendingBlockerSrcIdx]?.card?.name ?? 'Creature'} selected — click an attacker to assign it as a blocker`
+              : 'Click your creature → then click an attacker to assign a blocker. Or skip.'}
+          </span>
+          {Object.keys(assignedBlockers).length > 0 && (
+            <span style={{ color: '#88CCFF', fontFamily: "'Courier New', monospace", fontSize: '0.6rem', whiteSpace: 'nowrap' }}>
+              {Object.keys(assignedBlockers).length} block{Object.keys(assignedBlockers).length > 1 ? 's' : ''} assigned
+            </span>
+          )}
+          <button onClick={handleDoneBlocking} style={{
+            background: '#3A0D7A',
+            border: '2px solid #9955DD',
+            color: '#EE88FF',
+            fontFamily: "'Cinzel', serif",
+            fontSize: '0.65rem',
+            padding: '4px 12px',
+            cursor: 'pointer',
+            borderRadius: 3,
+            letterSpacing: 1,
+            whiteSpace: 'nowrap',
+          }}>Done Blocking</button>
+        </div>
+      )}
+
       {/* ── PLAYER BATTLEFIELD ── */}
       <div style={{
         flex: 1,
@@ -1341,8 +1555,9 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
         <Battlefield
           slots={player.battlefield}
           label="Your Battlefield"
-          selectedIdx={null}
-          onSlotClick={isPlayerTurn ? handlePlayerBfClick : null}
+                  newCardIdx={newCardAnimIdx}
+          selectedIdx={blockingPhase ? pendingBlockerSrcIdx : null}
+          onSlotClick={isPlayerTurn || blockingPhase ? handlePlayerBfClick : null}
           attackingIndices={selectingAttackers ? pendingAttackers : []}
           onCardHover={handleCardHover}
         />
@@ -1464,9 +1679,9 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
             <div style={{ display: 'flex', gap: 6 }}>
               <button
                 className="btn-primary"
-                disabled={!isPlayerTurn || selectedHandIdx === null || !selectedCard || selectedCard.type !== 'creature' || !canCast}
+                disabled={(!isPlayerTurn && !(instantWindow && selectedCard?.abilities?.includes('flash'))) || selectedHandIdx === null || !selectedCard || selectedCard.type !== 'creature' || !canCast}
                 title={
-                  !isPlayerTurn ? 'Not your turn'
+                  (!isPlayerTurn && !(instantWindow && selectedCard?.abilities?.includes('flash'))) ? 'Not your turn (only Flash creatures can be cast now)'
                   : !selectedCard ? 'Select a creature from your hand'
                   : selectedCard.type !== 'creature' ? 'Select a creature card (not a spell or land)'
                   : !canCast ? `Costs ${selectedCardCost} mana — you have ${player.availableMana} (play more lands)`
@@ -1475,7 +1690,7 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
                 onClick={handlePlayCreature}
                 style={{ fontSize: '0.75rem', padding: '4px 10px' }}
               >
-                Play Creature
+                {instantWindow && selectedCard?.abilities?.includes('flash') ? 'Flash Creature' : 'Play Creature'}
               </button>
 
               <button
@@ -1580,7 +1795,17 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
       </div>
 
       <style>{`
-        @keyframes pulse {
+        @keyframes cardEnterField {
+        0%   { transform: translateY(24px) scale(0.75); opacity: 0; }
+        60%  { transform: translateY(-4px) scale(1.04); opacity: 1; }
+        100% { transform: translateY(0)    scale(1.0);  opacity: 1; }
+      }
+      @keyframes lifelinkPop {
+        0%   { transform: translateY(0)    scale(1.0); opacity: 1; }
+        60%  { transform: translateY(-32px) scale(1.1); opacity: 1; }
+        100% { transform: translateY(-60px) scale(0.9); opacity: 0; }
+      }
+      @keyframes pulse {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.4; }
         }

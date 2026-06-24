@@ -59,23 +59,41 @@ src/lib/cardUtils.js                — shared FRAME palette + artUrl() — impo
 
 ## Asset Pipeline
 - Sprites/tiles are PNG files in `public/assets/`
-- Regenerate sprites: `python3 scripts/generate_assets.py`
+- Regenerate **player sprite**: `python3 scripts/gen_player_sprite.py` → `public/assets/sprites/player.png`
+- Regenerate **all NPC sprites + tiles**: `python3 scripts/generate_assets.py`
 - Regenerate world map: `python scripts/gen_worldmap.py` → `public/assets/worldmap-bg.png`
 - Regenerate hub interior: `python scripts/gen_hub.py` → `public/assets/hub-bg.png`
 - Regenerate club interiors: `python scripts/gen_clubs.py` → `public/assets/club-{color}-bg.png` (×5)
-- Style target: FFTA GBA pixel art — warm tan cobblestone, chibi sprites at 0.65 scale
-- Sprites are 24×32, tiles are 32×32
+- Regenerate archives: `python scripts/gen_archives.py` → `public/assets/archives-bg.png`
+- Shared drawing utilities: `scripts/iso_utils.py` — imported by all background generators
+- Style target: GBA/FFTA oblique 2.5D — visible wall faces, depth shading, 3/4-view sprites
+- Sprites are 24×32 RGBA; all face SW (lower-left) in 3/4 isometric view
 - **CRITICAL**: Do NOT use or copy assets from `C:\Users\Kenny\Downloads\CelestialShaman_v8_PATCHED\` — that is a completely separate project and is off limits
+
+## Visual Style — 2.5D Oblique (2026-06-24)
+The game uses **oblique 2.5D** (not true isometric) so physics grid positions match screen positions exactly.
+- Grid: 25×18 tiles, TILE=32px, canvas 800×576 — physics layer unchanged
+- Walls rendered with a 9px dark "cap" (top face) + 23px lighter "face" (vertical surface) — gives box depth
+- `iso_utils.py` exports: `wall_n/l/r/s()`, `floor_tile()`, `depth_rect()`, `draw_hud_bar()`
+- Sprites face SW with near-side (left) highlighted, far-side (right) shadowed; left foot lower (nearer in depth)
+
+## 4-Corner HUD Chrome (2026-06-24)
+Applied to HubScene, ClubScene, ArchivesScene:
+- **Top-left**: 32px dark bar (`#0A111E`) with gold border + status token panel (210×24px, gold outline)
+- **Top-right**: 90×90 square minimap (`drawMinimap()`) — SW=3px/tile, SH=5px/tile, gold player dot
+- **Bottom-left**: compass rose (`_drawCompassRose()`) — gold N arm, slate other arms, circle at (24, 552)
+- **Bottom-center/dialog**: portrait on LEFT side of dialog box (FFTA-authentic), text flows right
 
 ## Background Image System
 All scene backgrounds are pre-generated PNG files loaded via BootScene.js preload():
-- `worldmap-bg.png` — sky, mountains, 5 terrain zones, buildings, paths, Crystal Nexus
-- `hub-bg.png` — warm golden-brown stone floor (`#C4A265`), 5 club banners on north wall, 5-color Crystal Nexus (all mana colors), card shop booth right side (cols 19-22, rows 2-5), librarian counter, bookshelves, decorative pillars, portal door
-- `club-white-bg.png` — cream/gold warm stone (Solara Plains)
-- `club-blue-bg.png` — cool blue, navy carpet (Tidefall Isles)
-- `club-black-bg.png` — dark purple-grey, glowing cracks (Shadowmere Bog)
-- `club-red-bg.png` — volcanic lava seams, crimson (Embercrest Peaks)
-- `club-green-bg.png` — wood planks, moss carpet (Thornveil Woods)
+- `worldmap-bg.png` — sky, mountains with shadow faces, 5 terrain zones, buildings, paths, Crystal Nexus
+- `hub-bg.png` — oblique 2.5D stone room: crystal nexus cluster, counter, shelves, portal arch, 5 banners
+- `archives-bg.png` — dark oak library: bookshelves left wall, scroll racks right wall, candle sconces
+- `club-white-bg.png` — cream/gold podium + diamond carpet (Solara Plains)
+- `club-blue-bg.png` — slate/navy (Tidefall Isles)
+- `club-black-bg.png` — dark/purple glowing cracks (Shadowmere Bog)
+- `club-red-bg.png` — volcanic/crimson lava seams (Embercrest Peaks)
+- `club-green-bg.png` — wood/moss planks (Thornveil Woods)
 
 In Phaser scenes: `this.add.image(0, 0, 'key').setOrigin(0, 0).setDepth(0)` renders the background.
 Physics wall groups (ClubScene `this.wallGroup`) are kept as invisible colliders — do NOT delete them.
@@ -89,9 +107,33 @@ When fetched via API it arrives as a JS object — `getManaCost()` sums all valu
 - 1 land per turn, lands give 1 mana each
 - `startTurn(who)` — untaps all, sets `availableMana = lands.length`, draws 1 card
 - `playLand(who, idx)` — plays land from hand, `availableMana += 1`
-- `castCreature(who, idx)` — checks `availableMana >= cost`, taps lands, sets `summoningSick: true`
+- `castCreature(who, idx)` — checks `availableMana >= cost`, taps lands, sets `summoningSick: true`; fires ETB effects
 - `castSpell(who, idx, targetIdx, targetType)` — parses effect from description or abilities
 - Abilities: flying, vigilance, trample, haste, first_strike, lifelink, deathtouch
+- `activateAbility(who, bfIdx)` — taps creature to execute `{T}:` ability (mana, damage, draw)
+
+## Battle System — MTG Rules (2026-06-24)
+
+### Instant Speed Window
+- After all AI actions, but BEFORE `startTurn('player')`, an **instant window** opens
+- If player has instants in hand AND AI is about to cast spell/creature, window opens mid-AI-turn too
+- `pendingAiActions = { actions, nextIdx }` state pauses the AI action chain in BattleScreen
+- PASS button: orange when mid-AI-turn (`pendingAiActions !== null`), blue when end-of-turn
+- Counter spells cast during the window auto-cancel the AI's pending action and skip it
+- `playerPassedPriority = true` param prevents re-opening the window on resume
+
+### ETB (Enter the Battlefield) Effects
+- `parseETBEffect(description)` in CardEngine.js — regex: `when (?:~|this|.+?) enters(?: the battlefield)?`
+- Fallback regex: `enters the battlefield[,:\s]+` — catches any remaining Scryfall Oracle text formats
+- Auto-resolve: draw, lifegain (no target needed)
+- Needs target: destroy/exile/bounce — returns `needsETBTarget: { card, effect }` from `castCreature`
+- BattleScreen stores `pendingETB` state; player clicks AI creature to resolve; "Skip ETB" button available
+- AI auto-targets first enemy creature for its own ETB effects
+
+### Activated Abilities
+- `parseActivatedAbility(description)` — matches `{T}: add`, `{T}: deal X damage`, `{T}: draw`
+- `activateAbility(who, bfIdx)` — taps creature, executes effect
+- Player triggers by clicking own untapped creature in main phase with no card selected
 
 ## Progression System (2026-06-24)
 - `player_profiles` Supabase table: `gold`, `hp` (default 10), `seals` (jsonb array of color strings)
@@ -109,6 +151,25 @@ When fetched via API it arrives as a JS object — `getManaCost()` sums all valu
 - Card flip reveal animation: cards start face-down (`rotateY(180deg)`), flip one per 550ms
 - Purchase logged to `purchases` Supabase table; gold deducted and saved immediately
 - `shop_listings` table has one row: "Booster Pack" at 50 gold
+
+## Shop NPCs (2026-06-24)
+- **Hub NPC — Merchant Voss**: added to HubScene NPC_DEFS at tileX:21, tileY:4; `shop: true` flag
+  - Dialog ends with `game.events.emit('shopOpen')`; prompt label shows `[E] Shop`
+  - Sprite: `public/assets/sprites/npc-merchant.png` — 24×32 pixel art, gold robe, gray hair, coin bag
+  - Loaded in BootScene: `this.load.image('npc-merchant', 'assets/sprites/npc-merchant.png')`
+- **Overworld — Merchant Voss**: `drawMerchant()` in WorldMapScene at (330, 490)
+  - Clickable panel with gold border, hover highlight, emits `shopOpen` on click
+
+## Archmage Victory Pack Reward (2026-06-24)
+- Defeating an archmage **for the first time** (first seal win per color) awards a free booster pack
+- `ClubScene.js`: all 5 archmage battle defs have `archmage: true`
+- `GamePage.jsx`: `isFirstSealWin = winner === 'player' && activeBattle?.archmage && !progress.seals.includes(color)`
+  - Fetches 5 random cards → stores in `prizePackCards` state → second `<ShopOverlay>` instance renders
+- `ShopOverlay.jsx`: `prizeCards` prop — on mount, skips browse, jumps straight to card flip opening
+  - Header: "✦ VICTORY REWARD ✦" (instead of "✦ CARD SHOP ✦")
+  - Phase label: "Seal earned — cards are yours!"
+  - "Open Another" button hidden; close button says "Claim & Close"
+  - Repeat wins on same color give gold but no second pack
 
 ## Seal Gating (2026-06-24)
 - Gate order: White (free) → Blue (needs white) → Black (needs blue) → Red (needs black) → Green (needs red)
@@ -169,6 +230,15 @@ Scripts live at `C:\Users\Kenny\write_*.py`
 - **Land copy limit**: basic lands have no per-card copy limit in deck — only 30-card deck total applies. Non-lands still capped at ×3.
 - `FRAME` and `artUrl` extracted to `src/lib/cardUtils.js` — import from there, not redefined locally
 
+## Sound Engine (2026-06-24)
+- `src/game/systems/SoundEngine.js` — Web Audio API procedural chiptune synth (no audio files needed)
+- Singleton exported as named `{ SoundEngine }` — import in any scene/component
+- AudioContext created lazily on first SFX call (satisfies browser autoplay policy)
+- **BGM themes**: `battle`, `hub`, `world`, `archives`, `club` — looping square+triangle wave patterns
+- **SFX methods**: `cardPlay()`, `spellCast()`, `attackHit()`, `lifelinkHeal()`, `victory()`, `defeat()`
+- **Mute**: `SoundEngine.toggleMute()` → returns new muted bool; `SoundEngine.muted` getter
+- **Mute button**: 🔊/🔇 in BattleScreen top bar (right of TURN counter), gold border when unmuted
+
 ## Known Bugs Fixed
 - `getManaCost` now returns minimum 1 for non-land cards with null/empty mana_cost (was returning 0, making creatures free)
 - BattleScreen now shows mana cost hint when selecting cards and tooltip on disabled buttons
@@ -176,16 +246,19 @@ Scripts live at `C:\Users\Kenny\write_*.py`
 - Deck panel cards had no tooltip and no way to increment quantity — fixed: hover shows tooltip, click card increments, click ×qty badge decrements
 - `deck_cards.quantity` DB constraint was `BETWEEN 1 AND 3` — blocked land quantities > 3; changed to `>= 1`
 - Register page showed raw `{}` Supabase error — sanitized to "Registration failed. Please try again."
+- ETB regex only matched `this/~/it enters` — missed real Scryfall card names like "When Thassa's Oracle enters"; broadened to `.+?` wildcard
+- Instant window opened AFTER all AI actions — player couldn't counter; fixed with `pendingAiActions` mid-chain pause
+- `SoundEngine` used throughout BattleScreen without import → `ReferenceError` crash on battle start; fixed by creating `SoundEngine.js` and adding named import
 
 ## Pending Work (priority order)
-1. **Additional academy rooms** — Hub is one room inside the academy; mini-map shows passage left (upward) and bottom exit (World Map). Future rooms follow the same pattern: `gen_*.py` → PNG background, new `*Scene.js` mirroring HubScene structure. Plug-and-play.
-2. **Ironclad wolf knight player sprite** — create fresh in Python/Pillow, NOT from CelestialShaman
-3. **Battle system improvements**
-   - Card play animations
-   - Win/lose state improvements (death state when HP hits 0, recovery mechanic)
-   - Better AI difficulty scaling per club/region
-4. **Progression persistence improvements** — seals/gold/HP now in Supabase; next: HP recovery mechanic, gold spending beyond shop packs
-5. **Sound/music** — chiptune BGM per region, battle theme, SFX
+1. **Battle system polish** (highest priority — most gameplay-visible)
+   - Card play animations (creature lands on field, spell cast flash)
+   - Win/lose improvements: death state when HP hits 0, recovery mechanic (rest at hub to restore HP)
+   - Better AI difficulty per club/region (academy NPCs easy, archmages hard)
+   - More MTG abilities: vigilance, trample damage bleed-through, lifelink display
+2. **HP recovery mechanic** — player can rest at Hub to restore HP (costs gold or just a button); currently HP floors at 1 and never recovers
+3. **Additional academy rooms** — Hub is one room; passage left (upward) and bottom exit (World Map) exist. Future rooms: `gen_*.py` → PNG, new `*Scene.js` mirroring HubScene. Plug-and-play pattern.
+4. **Browser testing visual overhaul** — verify 2.5D backgrounds + 4-corner HUD + 3/4-view sprites look right in-game
 
 ## MCPs Installed (this project)
 - `puppeteer` — screenshot the running app for visual feedback

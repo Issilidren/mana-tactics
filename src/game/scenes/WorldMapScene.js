@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { SoundEngine } from '../systems/SoundEngine.js'
 
 // Building positions in worldmap-bg.png (matched to Python generator output)
 const REGIONS = [
@@ -220,7 +221,7 @@ export default class WorldMapScene extends Phaser.Scene {
     btn.on('pointerout',  () => label.setColor('#D4AF37'))
     btn.on('pointerdown', () => {
       this.cameras.main.fadeOut(300, 26, 18, 8)
-      this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('Hub'))
+      this.cameras.main.once('camerafadeoutcomplete', () => { SoundEngine.stopBGM(); this.scene.start('Hub') })
     })
   }
 

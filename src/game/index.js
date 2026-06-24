@@ -5,6 +5,7 @@ import StarterPickScene from './scenes/StarterPickScene.js'
 import HubScene from './scenes/HubScene.js'
 import WorldMapScene from './scenes/WorldMapScene.js'
 import { clubScenes } from './scenes/ClubScene.js'
+import ArchivesScene from './scenes/ArchivesScene.js'
 
 const config = {
   type: Phaser.AUTO,
@@ -19,7 +20,7 @@ const config = {
     },
   },
   // Boot → Title → (first time) StarterPick → Hub → WorldMap ↔ Clubs
-  scene: [BootScene, TitleScene, StarterPickScene, HubScene, ...clubScenes, WorldMapScene],
+  scene: [BootScene, TitleScene, StarterPickScene, HubScene, ArchivesScene, ...clubScenes, WorldMapScene],
 }
 
 export default config

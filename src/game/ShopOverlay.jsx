@@ -3,12 +3,21 @@ import { FRAME, artUrl } from '../lib/cardUtils'
 
 const PACK_COLORS = ['#C8A820','#1A66CC','#5522AA','#EE3311','#228833']
 
-export default function ShopOverlay({ listing, gold, onBuyPack, onClose }) {
+export default function ShopOverlay({ listing, gold, onBuyPack, onClose, prizeCards = null }) {
   const [phase, setPhase]         = useState('browse')   // 'browse' | 'opening' | 'done'
   const [cards, setCards]         = useState([])
   const [revealedCount, setRevealedCount] = useState(0)
   const [buying, setBuying]       = useState(false)
   const [error, setError]         = useState('')
+
+  // Jump to opening phase immediately when prize pack provided
+  useEffect(() => {
+    if (prizeCards && prizeCards.length > 0) {
+      setCards(prizeCards)
+      setRevealedCount(0)
+      setPhase('opening')
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-reveal one card at a time during 'opening' phase
   useEffect(() => {
@@ -59,7 +68,7 @@ export default function ShopOverlay({ listing, gold, onBuyPack, onClose }) {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
         <span style={{ fontFamily: "'Cinzel',serif", fontSize: '1.1rem', color: '#D4AF37', letterSpacing: '0.12em', fontWeight: 900 }}>
-          ✦ CARD SHOP ✦
+          {prizeCards ? '✦ VICTORY REWARD ✦' : '✦ CARD SHOP ✦'}
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
           <span style={{ color: goldColor, fontSize: '0.9rem' }}>
@@ -141,7 +150,7 @@ export default function ShopOverlay({ listing, gold, onBuyPack, onClose }) {
       {(phase === 'opening' || phase === 'done') && (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem', paddingTop: '4rem' }}>
           <div style={{ fontFamily: "'Cinzel',serif", fontSize: '1rem', color: '#D4AF37', letterSpacing: '0.1em' }}>
-            {phase === 'opening' ? 'Revealing your cards…' : 'Pack opened!'}
+            {phase === 'opening' ? (prizeCards ? 'Your victory reward…' : 'Revealing your cards…') : (prizeCards ? 'Seal earned — cards are yours!' : 'Pack opened!')}
           </div>
 
           {/* 5 card row */}
@@ -232,7 +241,7 @@ export default function ShopOverlay({ listing, gold, onBuyPack, onClose }) {
 
           {phase === 'done' && (
             <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
-              <button onClick={() => { setPhase('browse'); setCards([]); setRevealedCount(0) }}
+              {!prizeCards && <button onClick={() => { setPhase('browse'); setCards([]); setRevealedCount(0) }}
                 style={{
                   padding: '0.5rem 1.2rem', background: 'rgba(212,175,55,0.1)',
                   border: '1px solid rgba(212,175,55,0.4)', color: '#D4AF37',
@@ -240,7 +249,7 @@ export default function ShopOverlay({ listing, gold, onBuyPack, onClose }) {
                   cursor: 'pointer', borderRadius: 4,
                 }}>
                 Open Another
-              </button>
+              </button>}
               <button onClick={handleClose}
                 style={{
                   padding: '0.5rem 1.2rem', background: 'transparent',
@@ -248,7 +257,7 @@ export default function ShopOverlay({ listing, gold, onBuyPack, onClose }) {
                   fontFamily: "'Cinzel',serif", fontSize: '0.75rem', letterSpacing: '0.06em',
                   cursor: 'pointer', borderRadius: 4,
                 }}>
-                Return to Hub
+                {prizeCards ? 'Claim & Close' : 'Return to Hub'}
               </button>
             </div>
           )}

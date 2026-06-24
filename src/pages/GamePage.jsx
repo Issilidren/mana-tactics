@@ -23,6 +23,9 @@ export default function GamePage() {
   const [loading, setLoading]           = useState(true)
   const [activeBattle, setActiveBattle] = useState(null)
   const [shopOpen, setShopOpen]         = useState(false)
+  const [prizePackCards, setPrizePackCards] = useState(null)
+  const [gameOver, setGameOver] = useState(false)
+  const [gameComplete, setGameComplete] = useState(false)
   const [shopListing, setShopListing]   = useState(null)
   const [progress, setProgress]         = useState(() => ({
     gold:  parseInt(localStorage.getItem('mt_gold')  ?? '0', 10),
@@ -108,6 +111,7 @@ export default function GamePage() {
 
   function handleBattleEnd({ winner, reward, hpDamage = 0 }) {
     const color = activeBattle?.color
+    const isFirstSealWin = winner === 'player' && activeBattle?.archmage && !progress.seals.includes(color)
     setActiveBattle(null)
     let next
     if (winner === 'player') {
@@ -116,11 +120,23 @@ export default function GamePage() {
         ? progress.seals
         : [...progress.seals, color].filter(Boolean)
       next = { gold: newGold, hp: progress.hp, seals: newSeals }
+      if (newSeals.length >= 5 && !progress.seals.includes(color)) setGameComplete(true)
     } else {
-      next = { gold: progress.gold, hp: Math.max(1, progress.hp - hpDamage), seals: progress.seals }
+      const newHp = Math.max(0, progress.hp - hpDamage)
+      next = { gold: progress.gold, hp: newHp, seals: progress.seals }
+      if (newHp <= 0) {
+        next.hp = 10  // reset HP so they're not stuck at 0
+        setGameOver(true)
+      }
     }
     setProgress(next)
     saveProgress(next.gold, next.hp, next.seals)
+    if (isFirstSealWin) {
+      const offset = Math.floor(Math.random() * 315)
+      api.get(`/cards?order=id.asc&limit=5&offset=${offset}`)
+        .then(res => { if (res.data?.length) setPrizePackCards(res.data) })
+        .catch(() => {})
+    }
   }
 
   async function handleBuyPack() {
@@ -140,6 +156,14 @@ export default function GamePage() {
     } catch (_) { return [] }
   }
 
+  function handlePlayerRest() {
+    if (progress.hp >= 10) return
+    const cost = progress.gold >= 20 ? 20 : 0
+    const next = { ...progress, hp: 10, gold: progress.gold - cost }
+    setProgress(next)
+    saveProgress(next.gold, next.hp, next.seals)
+  }
+
   if (loading) return (
     <div style={styles.center}>
       <p style={{ color: '#D4AF37', fontFamily: 'monospace', letterSpacing: 2 }}>Loading…</p>
@@ -154,6 +178,7 @@ export default function GamePage() {
         onBattleStart={handleBattleStart}
         onStarterPicked={handleStarterPicked}
         onShopOpen={() => setShopOpen(true)}
+        onPlayerRest={handlePlayerRest}
         onExitGame={() => navigate('/')}
         onGameReady={(game) => { gameRef.current = game }}
       />
@@ -175,6 +200,95 @@ export default function GamePage() {
           gold={progress.gold}
           onBuyPack={handleBuyPack}
           onClose={() => setShopOpen(false)}
+        />
+      )}
+
+      {gameOver && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 500,
+          background: 'rgba(8,5,16,0.96)',
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
+          gap: 24,
+        }}>
+          <div style={{
+            fontFamily: '"Cinzel", serif', fontSize: '3rem', fontWeight: 'bold',
+            color: '#CC2222', textShadow: '0 0 20px rgba(200,20,20,0.8)',
+            letterSpacing: '0.12em',
+          }}>
+            DEFEATED
+          </div>
+          <div style={{
+            fontFamily: 'monospace', fontSize: '1rem', color: '#F0EED8',
+            textAlign: 'center', maxWidth: 360, lineHeight: 1.7,
+          }}>
+            Your HP reached zero. The Academy has restored your strength.<br />
+            Rest and try again, initiate.
+          </div>
+          <button
+            onClick={() => setGameOver(false)}
+            style={{
+              fontFamily: '"Cinzel", serif', fontSize: '1rem',
+              background: '#D4AF37', color: '#1a1208',
+              border: '2px solid #B8961E', borderRadius: 4,
+              padding: '10px 32px', cursor: 'pointer', fontWeight: 'bold',
+              letterSpacing: '0.08em',
+            }}
+          >
+            Return to Academy
+          </button>
+        </div>
+      )}
+
+      {gameComplete && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 500,
+          background: 'rgba(4,3,14,0.97)',
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
+          gap: 20,
+        }}>
+          <div style={{
+            fontFamily: '"Cinzel", serif', fontSize: '0.9rem', fontWeight: 'bold',
+            color: '#C8961E', letterSpacing: '0.3em', textTransform: 'uppercase',
+          }}>All Five Seals Obtained</div>
+          <div style={{
+            fontFamily: '"Cinzel", serif', fontSize: '2.8rem', fontWeight: 'bold',
+            color: '#FFD700',
+            textShadow: '0 0 30px rgba(255,200,30,0.85), 0 0 8px rgba(255,180,0,0.5)',
+            letterSpacing: '0.1em', textAlign: 'center',
+          }}>ARCHMAGE SOVEREIGN</div>
+          <div style={{
+            fontFamily: 'monospace', fontSize: '1rem', color: '#E8E4C8',
+            textAlign: 'center', maxWidth: 440, lineHeight: 1.8,
+          }}>
+            You have mastered all five schools of magic.<br />
+            White, Blue, Black, Red, and Green — the Crystal Nexus bows to your will.<br />
+            <span style={{ color: '#C8A840', fontSize: '0.85rem' }}>The Academy remains open. Your legend continues.</span>
+          </div>
+          <div style={{ display: 'flex', gap: 16, marginTop: 8 }}>
+            <button
+              onClick={() => setGameComplete(false)}
+              style={{
+                fontFamily: '"Cinzel", serif', fontSize: '1rem',
+                background: '#1A1208', color: '#FFD700',
+                border: '2px solid #C8961E', borderRadius: 4,
+                padding: '10px 32px', cursor: 'pointer', fontWeight: 'bold',
+                letterSpacing: '0.08em',
+                boxShadow: '0 0 16px rgba(200,150,30,0.4)',
+              }}
+            >Return to Academy</button>
+          </div>
+        </div>
+      )}
+
+      {prizePackCards && (
+        <ShopOverlay
+          listing={shopListing}
+          gold={progress.gold}
+          prizeCards={prizePackCards}
+          onBuyPack={handleBuyPack}
+          onClose={() => setPrizePackCards(null)}
         />
       )}
     </div>

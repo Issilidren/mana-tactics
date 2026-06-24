@@ -5,6 +5,9 @@ Run: powershell.exe -Command "python 'C:\\Users\\Kenny\\mana-tactics\\scripts\\g
 from PIL import Image, ImageDraw
 import math
 
+def _blend(dst, src, alpha):
+    return tuple(min(255, int(dst[i] * (1 - alpha) + src[i] * alpha)) for i in range(3))
+
 W, H = 800, 600
 img = Image.new('RGB', (W, H), (10, 18, 45))
 d = ImageDraw.Draw(img)
@@ -102,6 +105,16 @@ snow_peaks = [(55,128),(180,118),(320,105),(465,110),(610,112),(748,115)]
 for px, py in snow_peaks:
     d.polygon([(px,py),(px-12,py+20),(px+12,py+20)], fill=SNOW)
     d.polygon([(px,py),(px-5,py+9),(px+5,py+9)], fill=(240,245,255))
+
+# Mountain depth: dark shadow face on left (NW) side of each prominent peak
+SHADOW_FACE = (28, 32, 48)
+for px, py in snow_peaks:
+    # Left shadow triangle — makes peaks look 3D
+    shadow_pts = [(px, py), (px - 12, py + 20), (px - 28, py + 32), (px - 5, py + 12)]
+    d.polygon(shadow_pts, fill=SHADOW_FACE)
+# Mid-range shadow accents
+for px, py in [(30,158),(215,122),(355,118),(495,120),(630,122),(762,128)]:
+    d.polygon([(px,py),(px-8,py+16),(px-20,py+26),(px-4,py+10)], fill=SHADOW_FACE)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 4. OCEAN (east side)

@@ -368,7 +368,7 @@ export class CardEngine {
             slot.damage += effect.amount
             this._log(`${card.name} deals ${effect.amount} damage to ${slot.card.name}`)
             this._destroyDamaged(oppName)
-          } else if (targetType === 'creature' && targetIndex >= 0 && targetIndex < p.battlefield.length) {
+          } else if ((targetType === 'creature' || targetType === 'own_creature') && targetIndex >= 0 && targetIndex < p.battlefield.length) {
             // Can target own creature (e.g. Giant Growth targets own)
             const slot = p.battlefield[targetIndex]
             slot.damage += effect.amount
@@ -419,6 +419,11 @@ export class CardEngine {
             opp.graveyard = [...opp.graveyard, slot.card]
             opp.battlefield = opp.battlefield.filter((_, i) => i !== targetIndex)
             this._log(`${card.name} destroys ${slot.card.name}`)
+          } else if (targetType === 'own_creature' && targetIndex >= 0 && targetIndex < p.battlefield.length) {
+            const slot = p.battlefield[targetIndex]
+            p.graveyard = [...p.graveyard, slot.card]
+            p.battlefield = p.battlefield.filter((_, i) => i !== targetIndex)
+            this._log(`${card.name} destroys own ${slot.card.name}`)
           } else {
             this._log(`${card.name} — no valid target to destroy`)
           }
@@ -431,6 +436,10 @@ export class CardEngine {
             const slot = opp.battlefield[targetIndex]
             opp.battlefield = opp.battlefield.filter((_, i) => i !== targetIndex)
             this._log(`${card.name} exiles ${slot.card.name}`)
+          } else if (targetType === 'own_creature' && targetIndex >= 0 && targetIndex < p.battlefield.length) {
+            const slot = p.battlefield[targetIndex]
+            p.battlefield = p.battlefield.filter((_, i) => i !== targetIndex)
+            this._log(`${card.name} exiles own ${slot.card.name}`)
           } else {
             this._log(`${card.name} — no valid target to exile`)
           }
@@ -444,7 +453,7 @@ export class CardEngine {
             opp.hand = [...opp.hand, slot.card]
             opp.battlefield = opp.battlefield.filter((_, i) => i !== targetIndex)
             this._log(`${card.name} returns ${slot.card.name} to ${oppName}'s hand`)
-          } else if (targetType === 'creature' && targetIndex >= 0 && targetIndex < p.battlefield.length) {
+          } else if ((targetType === 'creature' || targetType === 'own_creature') && targetIndex >= 0 && targetIndex < p.battlefield.length) {
             const slot = p.battlefield[targetIndex]
             p.hand = [...p.hand, slot.card]
             p.battlefield = p.battlefield.filter((_, i) => i !== targetIndex)
@@ -702,6 +711,7 @@ export class CardEngine {
 
     const attackers = this.state.attackers
     const blockers  = this.state.blockers
+    const lifelinkHeals = []
 
     for (const attackerIdx of attackers) {
       const attackerSlot = attackerPlayer.battlefield[attackerIdx]
@@ -722,10 +732,23 @@ export class CardEngine {
           defenderPlayer.life -= dmg
           if (hasAbility(attackerSlot.card, 'lifelink')) {
             attackerPlayer.life += dmg
+            lifelinkHeals.push({ who: attackerWho, amount: dmg })
             this._log(`${attackerSlot.card.name} lifelink — ${attackerWho} gains ${dmg} life`)
           }
           this._log(`${attackerSlot.card.name} unblocked (removed blocker) — deals ${dmg} to ${defenderWho} (life: ${defenderPlayer.life})`)
           continue
+        }
+
+        // Reach: flying attackers can only be blocked by flying or reach creatures
+        if (hasAbility(attackerSlot.card, 'flying')) {
+          const canBlock = hasAbility(blockerSlot.card, 'flying') || hasAbility(blockerSlot.card, 'reach')
+          if (!canBlock) {
+            this._log(`${blockerSlot.card.name} cannot block ${attackerSlot.card.name} (flying) — treating as unblocked`)
+            const dmg = attackerSlot.card.power
+            defenderPlayer.life -= dmg
+            if (hasAbility(attackerSlot.card, 'lifelink')) { attackerPlayer.life += dmg; lifelinkHeals.push({ who: attackerWho, amount: dmg }) }
+            continue
+          }
         }
 
         const attackPow = attackerSlot.card.power
@@ -775,7 +798,7 @@ export class CardEngine {
           const excess = Math.max(0, attackPow - blockerSlot.card.toughness)
           if (excess > 0) {
             defenderPlayer.life -= excess
-            if (hasAbility(attackerSlot.card, 'lifelink')) attackerPlayer.life += excess
+            if (hasAbility(attackerSlot.card, 'lifelink')) { attackerPlayer.life += excess; lifelinkHeals.push({ who: attackerWho, amount: excess }) }
             this._log(`${attackerSlot.card.name} tramples for ${excess} to ${defenderWho} (life: ${defenderPlayer.life})`)
           }
         }
@@ -783,10 +806,12 @@ export class CardEngine {
         // Lifelink — damage this creature dealt heals the controller
         if (hasAbility(attackerSlot.card, 'lifelink') && dmgToBlocker > 0) {
           attackerPlayer.life += attackPow  // lifelink on full attack power dealt (before deathtouch multiplier)
+          lifelinkHeals.push({ who: attackerWho, amount: attackPow })
           this._log(`${attackerSlot.card.name} lifelink — ${attackerWho} gains ${attackPow} life (life: ${attackerPlayer.life})`)
         }
         if (hasAbility(blockerSlot.card, 'lifelink') && dmgToAttacker > 0) {
           defenderPlayer.life += blockPow
+          lifelinkHeals.push({ who: defenderWho, amount: blockPow })
           this._log(`${blockerSlot.card.name} lifelink — ${defenderWho} gains ${blockPow} life (life: ${defenderPlayer.life})`)
         }
 
@@ -797,6 +822,7 @@ export class CardEngine {
 
         if (hasAbility(attackerSlot.card, 'lifelink')) {
           attackerPlayer.life += dmg
+          lifelinkHeals.push({ who: attackerWho, amount: dmg })
           this._log(`${attackerSlot.card.name} lifelink — ${attackerWho} gains ${dmg} life`)
         }
         this._log(`${attackerSlot.card.name} unblocked — deals ${dmg} to ${defenderWho} (life: ${defenderPlayer.life})`)
@@ -811,7 +837,7 @@ export class CardEngine {
     this.state.phase = 'end'
 
     this.checkWinner()
-    return { ok: true }
+    return { ok: true, lifelinkHeals }
   }
 
   _destroyDamaged(who) {

@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { SoundEngine } from '../systems/SoundEngine.js'
 
 const TILE = 32
 const COLS = 25
@@ -51,7 +52,7 @@ const NPC_DEFS = [
       'White mages believe in order, unity, and protection.',
       'Flying creatures and healing are our greatest strengths. Care to spar?',
     ],
-    battle: { npcName: 'Scholar Lirien', color: 'white', deckType: 'white', reward: 30 },
+    battle: { npcName: 'Scholar Lirien', color: 'white', deckType: 'white', reward: 30, difficulty: 'easy' },
   },
   {
     key: 'red-knight',
@@ -63,7 +64,7 @@ const NPC_DEFS = [
       'Red mages strike fast and burn everything in their path.',
       'You will not withstand my assault! En garde!',
     ],
-    battle: { npcName: 'Knight Embrus', color: 'red', deckType: 'red', reward: 30 },
+    battle: { npcName: 'Knight Embrus', color: 'red', deckType: 'red', reward: 30, difficulty: 'easy' },
   },
   {
     key: 'practice-duelist',
@@ -76,7 +77,7 @@ const NPC_DEFS = [
       "I'll even let you see every card I draw. I won't need the advantage.",
       'This is me at a fraction of my strength. Remember that when we meet again.',
     ],
-    battle: { npcName: 'Duelist Kael', color: 'blue', deckType: 'starter', reward: 10, tutorial: true },
+    battle: { npcName: 'Duelist Kael', color: 'blue', deckType: 'starter', reward: 10, tutorial: true, difficulty: 'easy' },
   },
   {
     key: 'green-ranger',
@@ -88,7 +89,7 @@ const NPC_DEFS = [
       'The green wilds grow strong with massive creatures.',
       'We overwhelm opponents with size and trample! Shall we?',
     ],
-    battle: { npcName: 'Ranger Thornwood', color: 'green', deckType: 'green', reward: 30 },
+    battle: { npcName: 'Ranger Thornwood', color: 'green', deckType: 'green', reward: 30, difficulty: 'easy' },
   },
   {
     key: 'black-shade',
@@ -100,7 +101,7 @@ const NPC_DEFS = [
       '...',
       'You seek power? Black mages know only domination. Face me.',
     ],
-    battle: { npcName: 'Shade Duskren', color: 'black', deckType: 'black', reward: 30 },
+    battle: { npcName: 'Shade Duskren', color: 'black', deckType: 'black', reward: 30, difficulty: 'easy' },
   },
   {
     key: 'shopkeeper',
@@ -114,6 +115,18 @@ const NPC_DEFS = [
       'Spend wisely.',
     ],
     shop: true,
+  },
+  {
+    key: 'caretaker',
+    texture: 'npc-caretaker',
+    tileX: 10, tileY: 7,
+    tabColor: 0x44AA88,
+    name: 'Caretaker Elys',
+    dialog: [
+      'The academy takes care of its initiates.',
+      'Rest here and I will tend to your wounds. It costs 20 gold — unless you are penniless.',
+    ],
+    rest: true,
   },
 ]
 
@@ -133,6 +146,7 @@ export default class HubScene extends Phaser.Scene {
     this.transitioning = false   // CRITICAL: prevents portal from firing every frame
     this.minimapGfx = null
     this.minimapPlayerDot = null
+    this.leftPassageBounds = null
   }
 
   create() {
@@ -190,6 +204,8 @@ export default class HubScene extends Phaser.Scene {
     this.portalBounds = new Phaser.Geom.Rectangle(360, 518, 80, 30)
     // Card shop interaction zone — cols 19-22, rows 5-6 front edge
     this.shopBounds = new Phaser.Geom.Rectangle(600, 185, 112, 45)
+    // Left passage to Archives (rows 8-10, left wall)
+    this.leftPassageBounds = new Phaser.Geom.Rectangle(0, 262, 50, 80)
   }
 
   // ── Fountain (FFTA-style centrepiece) ─────────────────────────────────────
@@ -491,7 +507,10 @@ export default class HubScene extends Phaser.Scene {
     this.player.setDepth(10)
     this.player.body.setSize(12, 14)
     this.player.body.setOffset(2, 10)
-    this.physics.add.collider(this.player, this.wallGroup)
+    this._bumpCooldown = 0
+    this.physics.add.collider(this.player, this.wallGroup, () => {
+      SoundEngine.bump()
+    })
   }
 
   // ── NPCs ───────────────────────────────────────────────────────────────────
@@ -576,23 +595,33 @@ export default class HubScene extends Phaser.Scene {
     })
     this.eKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E)
     this.eKey.on('down', () => this.onEPress())
+    SoundEngine.startBGM('hub')
   }
 
   // ── HUD ────────────────────────────────────────────────────────────────────
 
   createUI() {
-    // GBC-style stats bar (dark panel, cream text, pixel border)
+    // HUD bar — 32px matching background PNG
     const barBg = this.add.graphics().setScrollFactor(0).setDepth(20)
-    barBg.fillStyle(0x0A1828)
-    barBg.fillRect(0, 0, COLS * TILE, 22)
-    barBg.lineStyle(2, 0x101010, 1)
-    barBg.lineBetween(0, 22, COLS * TILE, 22)
+    barBg.fillStyle(0x0A111E)
+    barBg.fillRect(0, 0, COLS * TILE, 32)
+    barBg.lineStyle(1, 0x503810, 1)
+    barBg.lineBetween(0, 31, COLS * TILE, 31)
+    barBg.lineStyle(1, 0xD4AF37, 1)
+    barBg.lineBetween(0, 32, COLS * TILE, 32)
 
-    this.statsText = this.add.text(10, 4, '', {
-      fontSize: '13px',
+    // Status token panel (top-left)
+    const tokenBg = this.add.graphics().setScrollFactor(0).setDepth(21)
+    tokenBg.fillStyle(0x0A111E)
+    tokenBg.fillRect(4, 4, 210, 24)
+    tokenBg.lineStyle(1, 0xD4AF37, 0.7)
+    tokenBg.strokeRect(4, 4, 210, 24)
+
+    this.statsText = this.add.text(10, 8, '', {
+      fontSize: '11px',
       color: '#F0EED8',
-      fontFamily: 'monospace',
-    }).setScrollFactor(0).setDepth(21)
+      fontFamily: 'Courier New, monospace',
+    }).setScrollFactor(0).setDepth(22)
 
     this.updateStats()
 
@@ -604,7 +633,36 @@ export default class HubScene extends Phaser.Scene {
       padding: { x: 5, y: 2 },
     }).setDepth(30).setVisible(false)
 
+    // Compass rose (bottom-left)
+    this._drawCompassRose()
+
     this.drawMinimap()
+  }
+
+  _drawCompassRose() {
+    const CR = this.add.graphics().setScrollFactor(0).setDepth(28)
+    const crx = 24, cry = 552, R = 18
+    CR.fillStyle(0x060C18, 0.9)
+    CR.fillCircle(crx, cry, R + 4)
+    CR.lineStyle(1, 0xD4AF37, 0.9)
+    CR.strokeCircle(crx, cry, R + 4)
+    const arms = [[0, false], [90, true], [180, false], [270, false]]
+    for (const [angle, isNorth] of arms) {
+      const rad = (angle - 90) * Math.PI / 180
+      const ex = crx + Math.round(R * Math.cos(rad))
+      const ey = cry + Math.round(R * Math.sin(rad))
+      const lx = crx + Math.round(5 * Math.cos(rad + Math.PI / 2))
+      const ly = cry + Math.round(5 * Math.sin(rad + Math.PI / 2))
+      const rx = crx + Math.round(5 * Math.cos(rad - Math.PI / 2))
+      const ry = cry + Math.round(5 * Math.sin(rad - Math.PI / 2))
+      CR.fillStyle(isNorth ? 0xD4AF37 : 0x5A6070)
+      CR.fillTriangle(lx, ly, rx, ry, ex, ey)
+    }
+    CR.fillStyle(0xD4AF37)
+    CR.fillCircle(crx, cry, 3)
+    this.add.text(crx, cry - R - 6, 'N', {
+      fontSize: '8px', color: '#D4AF37', fontFamily: 'Courier New, monospace',
+    }).setScrollFactor(0).setDepth(29).setOrigin(0.5, 1)
   }
 
   updateStats() {
@@ -619,69 +677,59 @@ export default class HubScene extends Phaser.Scene {
   }
 
   drawMinimap() {
-    const MM_X = COLS * TILE - 88   // right side of HUD bar
-    const MM_Y = 1
-    const MM_W = 80
-    const MM_H = 20
-    const S = 3  // pixels per tile (25*3=75, 18*3=54 — fits in bar height at 1px scale)
+    const MM_W = 90, MM_H = 90
+    const MM_X = COLS * TILE - MM_W - 4
+    const MM_Y = 2
+    const SW = Math.floor(MM_W / COLS)
+    const SH = Math.floor(MM_H / ROWS)
 
-    // We draw a compact 25x7 slice (just enough to show room shape in 20px height)
-    // Scale: 3px wide, 2px tall per tile to fit in 80x18px
-    const SW = 3, SH = 1  // tile scale x, y
+    const g = this.add.graphics().setScrollFactor(0).setDepth(28)
+    g.fillStyle(0x060C18, 0.92)
+    g.fillRect(MM_X - 2, MM_Y, MM_W + 4, MM_H + 4)
+    g.lineStyle(1, 0xD4AF37, 0.9)
+    g.strokeRect(MM_X - 2, MM_Y, MM_W + 4, MM_H + 4)
 
-    const g = this.add.graphics().setScrollFactor(0).setDepth(22)
-    // Background
-    g.fillStyle(0x0A0F1A)
-    g.fillRect(MM_X - 2, MM_Y, MM_W + 2, MM_H)
-    g.lineStyle(1, 0xD4AF37, 0.8)
-    g.strokeRect(MM_X - 2, MM_Y, MM_W + 2, MM_H)
-
-    // Draw room: iterate MAP array, warm tan for floor, dark for walls
+    // Map tiles
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
         const ch = MAP[r]?.[c] ?? 'W'
         const px = MM_X + c * SW
-        const py = MM_Y + 1 + Math.floor(r * (MM_H - 2) / ROWS)
-        if (ch === 'W') {
-          g.fillStyle(0x6B5B3E)
-        } else {
-          g.fillStyle(0xC4A265, 0.7)
-        }
-        g.fillRect(px, py, SW - 0, 1)
+        const py = MM_Y + 2 + r * SH
+        g.fillStyle(ch === 'W' ? 0x5A4830 : 0xC4A265, ch === 'W' ? 1 : 0.75)
+        g.fillRect(px, py, SW, SH)
       }
     }
 
-    // Portal dot (teal) at bottom center
-    const portalDotX = MM_X + 12 * SW + 1
-    const portalDotY = MM_Y + MM_H - 3
+    // Portal dot (teal)
     g.fillStyle(0x37D3C4)
-    g.fillRect(portalDotX, portalDotY, 4, 2)
+    g.fillRect(MM_X + 12 * SW - 1, MM_Y + 2 + 17 * SH, SW + 2, SH)
 
     // NPC dots
     for (const npc of this.npcs) {
-      const nx = MM_X + npc.def.tileX * SW + 1
-      const ny = MM_Y + 1 + Math.floor(npc.def.tileY * (MM_H - 2) / ROWS)
       g.fillStyle(npc.def.tabColor)
-      g.fillRect(nx, ny, 2, 1)
+      g.fillRect(MM_X + npc.def.tileX * SW, MM_Y + 2 + npc.def.tileY * SH,
+                 Math.max(2, SW - 1), Math.max(2, SH - 1))
     }
 
-    this.minimapGfx = g
+    this.add.text(MM_X + MM_W / 2, MM_Y - 12, 'MAP', {
+      fontSize: '9px', color: '#D4AF37', fontFamily: 'Courier New, monospace',
+    }).setScrollFactor(0).setDepth(28).setOrigin(0.5, 0)
 
-    // Player dot (white, separate graphics so we can update it)
-    this.minimapPlayerDot = this.add.graphics().setScrollFactor(0).setDepth(23)
+    this.minimapGfx = g
+    this.minimapPlayerDot = this.add.graphics().setScrollFactor(0).setDepth(29)
+    this._mmX = MM_X
+    this._mmY = MM_Y
+    this._mmSW = SW
+    this._mmSH = SH
   }
 
   updateMinimap() {
-    if (!this.minimapPlayerDot || !this.player) return
-    const MM_X = COLS * TILE - 88
-    const MM_Y = 1
-    const MM_H = 20
-    const SW = 3
-    const px = MM_X + Math.floor((this.player.x / TILE) * SW)
-    const py = MM_Y + 1 + Math.floor((this.player.y / (ROWS * TILE)) * (MM_H - 2))
+    if (!this.minimapPlayerDot || !this.player || !this._mmX) return
+    const px = this._mmX + Math.floor(this.player.x / TILE) * this._mmSW
+    const py = this._mmY + 2 + Math.floor(this.player.y / TILE) * this._mmSH
     this.minimapPlayerDot.clear()
-    this.minimapPlayerDot.fillStyle(0xFFFFFF)
-    this.minimapPlayerDot.fillRect(px, py, 2, 2)
+    this.minimapPlayerDot.fillStyle(0xFFD700)
+    this.minimapPlayerDot.fillRect(px, py, this._mmSW + 1, this._mmSH + 1)
   }
 
   // ── Dialog (FFTA style: rounded cream box, portrait right, name tab) ───────
@@ -696,7 +744,7 @@ export default class HubScene extends Phaser.Scene {
     const BOX_W = COLS * TILE - 40
     const BOX_H = 150
     const PORT_W = 70
-    const TEXT_X = BOX_X + 14
+    const TEXT_X = BOX_X + PORT_W + 22
     const TEXT_W = BOX_W - PORT_W - 30
 
     const bg = this.add.graphics().setDepth(50)
@@ -714,25 +762,25 @@ export default class HubScene extends Phaser.Scene {
     const tabColor = npc.def.tabColor || 0x4878C8
     const tabW = 160
     bg.fillStyle(tabColor)
-    bg.fillRoundedRect(BOX_X + 14, BOX_Y - 22, tabW, 26, { tl: 6, tr: 6, bl: 0, br: 0 })
+    bg.fillRoundedRect(BOX_X + 8, BOX_Y - 22, tabW, 26, { tl: 6, tr: 6, bl: 0, br: 0 })
     bg.lineStyle(2, 0x2A1808, 1)
-    bg.strokeRoundedRect(BOX_X + 14, BOX_Y - 22, tabW, 26, { tl: 6, tr: 6, bl: 0, br: 0 })
+    bg.strokeRoundedRect(BOX_X + 8, BOX_Y - 22, tabW, 26, { tl: 6, tr: 6, bl: 0, br: 0 })
 
-    // Portrait zone (right side) — warm cream recess
+    // Portrait zone (LEFT side) — warm cream recess
     bg.fillStyle(0xE8DFC8)
-    bg.fillRoundedRect(BOX_X + BOX_W - PORT_W - 8, BOX_Y + 8, PORT_W, BOX_H - 16, 6)
+    bg.fillRoundedRect(BOX_X + 8, BOX_Y + 8, PORT_W, BOX_H - 16, 6)
     bg.lineStyle(1, 0x9A8060, 0.7)
-    bg.strokeRoundedRect(BOX_X + BOX_W - PORT_W - 8, BOX_Y + 8, PORT_W, BOX_H - 16, 6)
+    bg.strokeRoundedRect(BOX_X + 8, BOX_Y + 8, PORT_W, BOX_H - 16, 6)
 
-    // Portrait sprite — 3× scale on right
+    // Portrait sprite — 3× scale on LEFT
     const portrait = this.add.sprite(
-      BOX_X + BOX_W - PORT_W / 2 - 8,
+      BOX_X + PORT_W / 2 + 8,
       BOX_Y + BOX_H / 2,
       npc.def.texture
     ).setScale(3).setDepth(52)
 
     // Name text on the tab (white bold)
-    const nameText = this.add.text(BOX_X + 24, BOX_Y - 14, npc.def.name, {
+    const nameText = this.add.text(BOX_X + 16, BOX_Y - 14, npc.def.name, {
       fontSize: '12px',
       color: '#FFFFFF',
       fontFamily: '"Arial", sans-serif',
@@ -767,6 +815,7 @@ export default class HubScene extends Phaser.Scene {
   }
 
   advanceDialog() {
+    SoundEngine.dialogTick()
     if (!this.dialogState) return
     const { npc, pageIndex } = this.dialogState
     const next = pageIndex + 1
@@ -782,6 +831,10 @@ export default class HubScene extends Phaser.Scene {
       } else if (npc.def.shop) {
         this.time.delayedCall(100, () => {
           this.game.events.emit('shopOpen')
+        })
+      } else if (npc.def.rest) {
+        this.time.delayedCall(100, () => {
+          this.game.events.emit('playerRest')
         })
       }
     }
@@ -831,6 +884,7 @@ export default class HubScene extends Phaser.Scene {
     this.handleMovement()
     this.updateNPCPrompts()
     this.checkPortalOverlap()
+    this.checkPassages()
     this.updateStats()
     this.updateMinimap()
   }
@@ -854,7 +908,7 @@ export default class HubScene extends Phaser.Scene {
   updateNPCPrompts() {
     const nearby = this.getNearbyNPC()
     if (nearby && !this.dialogState) {
-      const label = nearby.def.battle ? '[E] Duel' : nearby.def.shop ? '[E] Shop' : '[E] Talk'
+      const label = nearby.def.battle ? '[E] Duel' : nearby.def.shop ? '[E] Shop' : nearby.def.rest ? '[E] Rest' : '[E] Talk'
       this.promptLabel.setText(label)
       this.promptLabel.setVisible(true)
       this.promptLabel.setPosition(
@@ -865,8 +919,25 @@ export default class HubScene extends Phaser.Scene {
       this.promptLabel.setText('[E] Shop')
       this.promptLabel.setVisible(true)
       this.promptLabel.setPosition(648 - this.promptLabel.width / 2, 172)
+    } else if (this.leftPassageBounds?.contains(this.player.x, this.player.y) && !this.dialogState) {
+      this.promptLabel.setText('[← Archives]')
+      this.promptLabel.setVisible(true)
+      this.promptLabel.setPosition(48, 302 - this.promptLabel.height / 2)
     } else {
       this.promptLabel.setVisible(false)
+    }
+  }
+
+  checkPassages() {
+    if (this.dialogState || this.transitioning) return
+    const lb = this.leftPassageBounds
+    if (lb && lb.contains(this.player.x, this.player.y)) {
+      this.transitioning = true
+      this.player.setVelocity(0, 0)
+      this.cameras.main.fadeOut(400, 16, 48, 88)
+      this.cameras.main.once('camerafadeoutcomplete', () => {
+        this.scene.start('Archives')
+      })
     }
   }
 
