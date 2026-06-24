@@ -71,8 +71,12 @@ const NPC_DEFS = [
     tileX: 12, tileY: 9,
     tabColor: 0x1A4A90,
     name: 'Duelist Kael',
-    dialog: ['Care to spar before the real thing? Let\'s test that deck!'],
-    battle: { npcName: 'Duelist Kael', color: 'blue', deckType: 'starter', reward: 10 },
+    dialog: [
+      'Another new initiate. Fine — I\'ll spare a few minutes.',
+      "I'll even let you see every card I draw. I won't need the advantage.",
+      'This is me at a fraction of my strength. Remember that when we meet again.',
+    ],
+    battle: { npcName: 'Duelist Kael', color: 'blue', deckType: 'starter', reward: 10, tutorial: true },
   },
   {
     key: 'green-ranger',

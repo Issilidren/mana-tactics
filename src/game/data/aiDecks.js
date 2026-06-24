@@ -209,6 +209,20 @@ function qty(cardKey, count) {
 }
 
 export const AI_DECKS = {
+  // Tutorial deck — very simple cards that demonstrate all core mechanics:
+  // lands for mana, a 1/1, a first-strike creature, a haste creature, a pump
+  // spell, and a direct-damage spell.  Intentionally easy.
+  starter: {
+    color: 'colorless',
+    cards: [
+      qty('white_knight', 3),    // 2/2 first strike
+      qty('llanowar_elves', 3),  // 1/1 — demonstrates small creatures + mana
+      qty('goblin_guide', 2),    // 2/2 haste — demonstrates haste
+      qty('giant_growth', 2),    // +3/+3 spell — demonstrates pump spells
+      qty('lightning_bolt', 2),  // 3 damage — demonstrates direct damage
+    ],
+  },
+
   // Starter deck — cheap creatures for early NPC fights
   colorless: {
     color: 'colorless',

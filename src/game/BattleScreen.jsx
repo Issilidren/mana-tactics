@@ -775,7 +775,8 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
   useEffect(() => {
     import('./data/aiDecks.js').then(({ AI_DECKS }) => {
       const aiDeckDef = AI_DECKS[deckType] || AI_DECKS.colorless
-      const engine = new CardEngine(playerDeck, aiDeckDef.cards, color)
+      const tutorial = npcData?.tutorial || false
+      const engine = new CardEngine(playerDeck, aiDeckDef.cards, color, tutorial)
       engineRef.current = engine
       aiRef.current = new AIOpponent(engine)
 
@@ -1154,7 +1155,7 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
             aiRef.current = null
             import('./data/aiDecks.js').then(({ AI_DECKS }) => {
               const aiDeckDef = AI_DECKS[deckType] || AI_DECKS.colorless
-              const engine = new CardEngine(playerDeck, aiDeckDef.cards)
+              const engine = new CardEngine(playerDeck, aiDeckDef.cards, color, npcData?.tutorial || false)
               engineRef.current = engine
               aiRef.current = new AIOpponent(engine)
               for (let i = 0; i < 5; i++) engine.drawCard('player')
@@ -1196,6 +1197,20 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
         }}>
           {npcName}
         </div>
+        {npcData?.tutorial && (
+          <div style={{
+            background: '#1A4A90',
+            border: '2px solid #4488EE',
+            borderRadius: 2,
+            padding: '1px 7px',
+            fontSize: '0.6rem',
+            fontWeight: 'bold',
+            color: '#88CCFF',
+            letterSpacing: 2,
+          }}>
+            TUTORIAL
+          </div>
+        )}
         <span style={{ color: '#B0C8E8', fontSize: '0.75rem', fontWeight: 'bold' }}>HP</span>
         <LifeDots life={ai.life} />
         <span style={{ color: '#7090B0', fontSize: '0.75rem' }}>

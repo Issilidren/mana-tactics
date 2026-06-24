@@ -160,10 +160,11 @@ function parseSpellEffect(description) {
 // ── CardEngine class ─────────────────────────────────────────────────────────
 
 export class CardEngine {
-  constructor(playerDeck, aiDeck, playerColor = 'white') {
+  constructor(playerDeck, aiDeck, playerColor = 'white', tutorialMode = false) {
     this.state = this.initState(playerDeck, aiDeck, playerColor)
     this._tempBuffs = []
     this._tokenCounter = 0
+    this.tutorialMode = tutorialMode
   }
 
   initState(playerDeck, aiDeck, playerColor) {
@@ -221,7 +222,13 @@ export class CardEngine {
     }
     const card = p.library.shift()
     p.hand = [...p.hand, card]
-    this._log(who === 'ai' ? 'Opponent draws a card.' : `You draw ${card.name}`)
+    if (who === 'ai') {
+      this._log(this.tutorialMode
+        ? `Kael shows you: drew ${card.name}.`
+        : 'Opponent draws a card.')
+    } else {
+      this._log(`You draw ${card.name}`)
+    }
     return true
   }
 
@@ -236,6 +243,18 @@ export class CardEngine {
 
     this.state.phase = 'draw'
     this._log(`Turn ${turn} — ${who}'s turn. Lands: ${p.lands.length}, Mana: ${p.availableMana}`)
+
+    // Tutorial tips at specific player turn milestones
+    if (this.tutorialMode && who === 'player') {
+      if (turn === 1)
+        this._log('Kael: "Play a land first. Even beginners know that."')
+      else if (turn === 2)
+        this._log('Kael: "Now spend that mana — select a creature and hit Play Creature."')
+      else if (turn === 3)
+        this._log('Kael: "When you're ready — Attack, pick your creatures, Confirm. Go on."')
+      else if (turn === 4)
+        this._log('Kael: "Spells target the player or a creature on the field. Try one."')
+    }
 
     this.drawCard(who)
     this.state.phase = 'main'
