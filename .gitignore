@@ -19,6 +19,9 @@ Thumbs.db
 # Claude Code session files
 .claude.json
 
+# Dev assets folder — local only (handoffs, concepts, reference images)
+_dev-assets/
+
 # Handoff docs + prototypes — stay local, not for repo
 Downloads/
 *.handoff.md
