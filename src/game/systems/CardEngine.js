@@ -157,6 +157,25 @@ function parseSpellEffect(description) {
   return null
 }
 
+// ── ETB trigger parser ────────────────────────────────────────────────────────
+function parseETBEffect(description) {
+  if (!description) return null
+  const desc = description.toLowerCase()
+  const m = desc.match(/when (?:~|this creature|this|it) enters(?: the battlefield)?[,\s]+(.+?)(?:\.|;|$)/)
+  return m ? parseSpellEffect(m[1].trim()) : null
+}
+
+// ── Activated ability parser ──────────────────────────────────────────────────
+function parseActivatedAbility(description) {
+  if (!description) return null
+  const desc = description.toLowerCase()
+  if (desc.match(/(?:\{t\}|tap): add/)) return { cost: 'tap', type: 'mana', amount: 1 }
+  const dmg = desc.match(/(?:\{t\}|tap): .*deal[s]? (\d+) damage/)
+  if (dmg) return { cost: 'tap', type: 'damage', amount: parseInt(dmg[1]) }
+  if (desc.match(/(?:\{t\}|tap): draw/)) return { cost: 'tap', type: 'draw', amount: 1 }
+  return null
+}
+
 // ── CardEngine class ─────────────────────────────────────────────────────────
 
 export class CardEngine {
@@ -298,6 +317,16 @@ export class CardEngine {
     if (hasAbility(card, 'lifegain_enter')) {
       p.life += 2
       this._log(`${who} gains 2 life from ${card.name} (life: ${p.life})`)
+    }
+
+    // ETB effect from Oracle text
+    const etbEffect = parseETBEffect(card.description)
+    if (etbEffect) {
+      const etbResult = this._resolveETBEffect(who, card, etbEffect)
+      if (etbResult?.needsTarget) {
+        this.checkWinner()
+        return { ok: true, needsETBTarget: { card, effect: etbEffect } }
+      }
     }
 
     this.checkWinner()
@@ -518,6 +547,96 @@ export class CardEngine {
     p.hand = [...p.hand, { ...card }]
     this._log(`${who} wishes for ${card.name}`)
     return { ok: true }
+  }
+
+  _resolveETBEffect(who, card, effect, targetIdx = -1) {
+    const p = this._player(who)
+    const opp = this._opponent(who)
+    const oppName = this._opponentName(who)
+
+    switch (effect.type) {
+      case 'draw':
+        for (let i = 0; i < effect.amount; i++) this.drawCard(who)
+        this._log(`${card.name} ETB — ${who} draws ${effect.amount} card(s)`)
+        return { ok: true }
+      case 'lifegain':
+        p.life += effect.amount
+        this._log(`${card.name} ETB — ${who} gains ${effect.amount} life (life: ${p.life})`)
+        return { ok: true }
+      case 'damage':
+        if (targetIdx >= 0 && targetIdx < opp.battlefield.length) {
+          opp.battlefield[targetIdx].damage += effect.amount
+          this._log(`${card.name} ETB — deals ${effect.amount} damage to ${opp.battlefield[targetIdx].card.name}`)
+          this._destroyDamaged(oppName)
+        } else {
+          opp.life -= effect.amount
+          this._log(`${card.name} ETB — deals ${effect.amount} damage to ${oppName} (life: ${opp.life})`)
+        }
+        this.checkWinner()
+        return { ok: true }
+      case 'destroy':
+      case 'exile':
+      case 'bounce':
+        if (targetIdx >= 0 && targetIdx < opp.battlefield.length) {
+          const slot = opp.battlefield[targetIdx]
+          if (effect.type === 'bounce') opp.hand = [...opp.hand, slot.card]
+          else opp.graveyard = [...opp.graveyard, slot.card]
+          opp.battlefield = opp.battlefield.filter((_, i) => i !== targetIdx)
+          this._log(`${card.name} ETB — ${effect.type}s ${slot.card.name}`)
+          return { ok: true }
+        } else if (opp.battlefield.length > 0 && who === 'player') {
+          return { needsTarget: true, effect }
+        } else if (opp.battlefield.length > 0) {
+          // AI auto-targets first enemy creature
+          const slot = opp.battlefield[0]
+          if (effect.type === 'bounce') opp.hand = [...opp.hand, slot.card]
+          else opp.graveyard = [...opp.graveyard, slot.card]
+          opp.battlefield = opp.battlefield.slice(1)
+          this._log(`${card.name} ETB — ${effect.type}s ${slot.card.name}`)
+          return { ok: true }
+        }
+        return { ok: true }
+      default:
+        return { ok: true }
+    }
+  }
+
+  completeETB(who, card, effect, targetIdx) {
+    const result = this._resolveETBEffect(who, card, effect, targetIdx)
+    this.checkWinner()
+    return result
+  }
+
+  activateAbility(who, bfIdx) {
+    const p = this._player(who)
+    const opp = this._opponent(who)
+    const oppName = this._opponentName(who)
+    const slot = p.battlefield[bfIdx]
+    if (!slot) return { ok: false, error: 'No creature at that position' }
+    if (slot.tapped) return { ok: false, error: `${slot.card.name} is already tapped` }
+
+    const ability = parseActivatedAbility(slot.card.description)
+    if (!ability) return { ok: false, error: `${slot.card.name} has no activated ability` }
+
+    slot.tapped = true
+
+    switch (ability.type) {
+      case 'mana':
+        p.availableMana += ability.amount
+        this._log(`${who} taps ${slot.card.name}: +${ability.amount} mana (pool: ${p.availableMana})`)
+        return { ok: true }
+      case 'damage':
+        opp.life -= ability.amount
+        this._log(`${who} taps ${slot.card.name}: deals ${ability.amount} damage to ${oppName} (life: ${opp.life})`)
+        this.checkWinner()
+        return { ok: true }
+      case 'draw':
+        this.drawCard(who)
+        this._log(`${who} taps ${slot.card.name}: draws a card`)
+        return { ok: true }
+      default:
+        return { ok: false, error: 'Unknown activated ability type' }
+    }
   }
 
   _tapLandsForCost(p, cost) {

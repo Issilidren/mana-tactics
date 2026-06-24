@@ -753,6 +753,8 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
   const [message, setMessage] = useState('')
   const [hoveredCard, setHoveredCard] = useState(null) // { card, rect }
   const [searchModal, setSearchModal] = useState(null) // { library, wishCards }
+  const [instantWindow, setInstantWindow] = useState(false)
+  const [pendingETB, setPendingETB] = useState(null) // { card, effect }
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -793,12 +795,17 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
   // ── Player action handlers ───────────────────────────────────────────────────
 
   function handleHandCardClick(i) {
-    if (!gameState || gameState.activePlayer !== 'player') return
-    if (gameState.phase !== 'main') return
+    if (!gameState) return
     if (aiThinking) return
-
     const card = gameState.player.hand[i]
     if (!card) return
+    // During instant window: only allow instants
+    if (instantWindow) {
+      if (card.type !== 'instant') return showMessage('You can only cast instants right now — or press PASS')
+    } else {
+      if (gameState.activePlayer !== 'player') return
+      if (gameState.phase !== 'main') return
+    }
 
     if (selectedHandIdx === i) {
       setSelectedHandIdx(null)
@@ -852,6 +859,10 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
     const result = engineRef.current.castCreature('player', selectedHandIdx)
     if (!result.ok) return showMessage(result.error)
 
+    if (result.needsETBTarget) {
+      setPendingETB(result.needsETBTarget)
+      showMessage(`${result.needsETBTarget.card.name} enters — click an opponent's creature to target`, 4000)
+    }
     setSelectedHandIdx(null)
     setSelectedBfIdx(null)
     syncState()
@@ -896,6 +907,16 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
       }
     }
 
+    // Tap to activate ability: main phase, player's turn, no spell selected, not selecting attackers
+    if (gameState.phase === 'main' && gameState.activePlayer === 'player' && selectedHandIdx === null && !selectingAttackers) {
+      const result = engineRef.current.activateAbility('player', i)
+      if (result.ok) {
+        syncState()
+        return
+      }
+      // If no ability, fall through to attacker selection below
+    }
+
     if (selectingAttackers) {
       const slot = gameState.player.battlefield[i]
       if (!slot || slot.summoningSick || slot.tapped) {
@@ -909,7 +930,18 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
 
   function handleAiBfClick(i) {
     if (!gameState || aiThinking) return
-    if (gameState.phase !== 'main' || selectedHandIdx === null) return
+
+    // ETB targeting takes priority
+    if (pendingETB) {
+      engineRef.current.completeETB('player', pendingETB.card, pendingETB.effect, i)
+      setPendingETB(null)
+      syncState()
+      return
+    }
+
+    const isMain = gameState.phase === 'main' && gameState.activePlayer === 'player'
+    if (!isMain && !instantWindow) return
+    if (selectedHandIdx === null) return
 
     const card = gameState.player.hand[selectedHandIdx]
     if (!card || (card.type !== 'instant' && card.type !== 'sorcery' && card.type !== 'spell')) return
@@ -963,6 +995,14 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
     runAiTurn()
   }
 
+  function handlePassInstantWindow() {
+    setInstantWindow(false)
+    setSelectedHandIdx(null)
+    setSelectedBfIdx(null)
+    engineRef.current.startTurn('player')
+    syncState()
+  }
+
   // ── AI turn runner ───────────────────────────────────────────────────────────
   function runAiTurn() {
     setAiThinking(true)
@@ -991,10 +1031,8 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
         if (!engineRef.current) return
         engineRef.current.endTurn('ai')
         syncState()
-
-        engineRef.current.startTurn('player')
-        syncState()
         setAiThinking(false)
+        setInstantWindow(true)
       }, 600)
       return
     }
@@ -1241,7 +1279,7 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
           slots={ai.battlefield}
           label="AI Battlefield"
           selectedIdx={null}
-          onSlotClick={isPlayerTurn && selectedHandIdx !== null ? handleAiBfClick : null}
+          onSlotClick={(isPlayerTurn && selectedHandIdx !== null) || pendingETB || (instantWindow && selectedHandIdx !== null) ? handleAiBfClick : null}
           isFlipped={false}
           onCardHover={handleCardHover}
         />
@@ -1378,7 +1416,7 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
                   card={card}
                   size="hand"
                   isSelected={selectedHandIdx === i}
-                  onClick={isPlayerTurn ? () => handleHandCardClick(i) : undefined}
+                  onClick={isPlayerTurn || instantWindow ? () => handleHandCardClick(i) : undefined}
                   onHover={handleCardHover}
                 />
               </div>
@@ -1422,7 +1460,7 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
 
               <button
                 className="btn-ghost"
-                disabled={!isPlayerTurn || selectedHandIdx === null || !selectedCard || (selectedCard.type !== 'instant' && selectedCard.type !== 'sorcery' && selectedCard.type !== 'spell') || !canCast}
+                disabled={(!isPlayerTurn && !instantWindow) || selectedHandIdx === null || !selectedCard || (selectedCard.type !== 'instant' && selectedCard.type !== 'sorcery' && selectedCard.type !== 'spell') || !canCast}
                 title={
                   !isPlayerTurn ? 'Not your turn'
                   : !selectedCard ? 'Select a spell from your hand'
@@ -1437,35 +1475,60 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
               </button>
             </div>
 
-            <div style={{ display: 'flex', gap: 6 }}>
-              {!selectingAttackers ? (
-                <button
-                  className="btn-ghost"
-                  disabled={!isPlayerTurn || phase === 'draw'}
-                  onClick={handleStartAttack}
-                  style={{ fontSize: '0.75rem', padding: '4px 10px' }}
-                >
-                  Attack
-                </button>
-              ) : (
+            {instantWindow ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ fontSize: '0.62rem', color: '#88CCFF', letterSpacing: 1 }}>
+                  INSTANT WINDOW — cast instants, then pass
+                </div>
                 <button
                   className="btn-primary"
-                  onClick={handleConfirmAttack}
-                  style={{ fontSize: '0.75rem', padding: '4px 10px', background: '#cc4422' }}
+                  onClick={handlePassInstantWindow}
+                  style={{ fontSize: '0.75rem', padding: '4px 14px', background: '#1A4A90', borderColor: '#4488EE' }}
                 >
-                  Confirm Attack ({pendingAttackers.length})
+                  PASS →
                 </button>
-              )}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: 6 }}>
+                {!selectingAttackers ? (
+                  <button
+                    className="btn-ghost"
+                    disabled={!isPlayerTurn || phase === 'draw'}
+                    onClick={handleStartAttack}
+                    style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+                  >
+                    Attack
+                  </button>
+                ) : (
+                  <button
+                    className="btn-primary"
+                    onClick={handleConfirmAttack}
+                    style={{ fontSize: '0.75rem', padding: '4px 10px', background: '#cc4422' }}
+                  >
+                    Confirm Attack ({pendingAttackers.length})
+                  </button>
+                )}
 
-              <button
-                className="btn-ghost"
-                disabled={!isPlayerTurn || aiThinking}
-                onClick={handleEndTurn}
-                style={{ fontSize: '0.75rem', padding: '4px 10px' }}
-              >
-                End Turn
-              </button>
-            </div>
+                <button
+                  className="btn-ghost"
+                  disabled={!isPlayerTurn || aiThinking}
+                  onClick={handleEndTurn}
+                  style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+                >
+                  End Turn
+                </button>
+
+                {pendingETB && (
+                  <button
+                    className="btn-ghost"
+                    onClick={() => { setPendingETB(null); syncState() }}
+                    style={{ fontSize: '0.75rem', padding: '4px 10px', color: '#FFAA44', borderColor: '#FFAA44' }}
+                  >
+                    Skip ETB
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Game log */}
