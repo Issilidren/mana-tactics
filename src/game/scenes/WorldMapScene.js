@@ -66,6 +66,7 @@ export default class WorldMapScene extends Phaser.Scene {
     this.drawRegionMarkers()
     this.drawBackButton()
     this.drawSealsLegend()
+    this.drawMerchant()
   }
 
   // ── Title panel ─────────────────────────────────────────────────────────────
@@ -242,5 +243,37 @@ export default class WorldMapScene extends Phaser.Scene {
     this.add.text(760, 575, `Seals: ${seals.length}/5`, {
       fontSize: '12px', color: '#D4AF37', fontFamily: 'serif',
     }).setOrigin(1, 1).setDepth(10)
+  }
+
+  // ── Wandering Merchant ────────────────────────────────────────────────────────
+  drawMerchant() {
+    const mx = 330, my = 490
+    const gold = this.registry.get('gold') ?? 0
+
+    const g = this.add.graphics().setDepth(6)
+    const draw = (hover) => {
+      g.clear()
+      g.fillStyle(hover ? 0x1A2812 : 0x08100A, hover ? 0.96 : 0.88)
+      g.fillRoundedRect(mx - 64, my - 26, 128, 52, 6)
+      g.lineStyle(2, hover ? 0xD4AF37 : 0xC8961E, hover ? 1 : 0.85)
+      g.strokeRoundedRect(mx - 64, my - 26, 128, 52, 6)
+    }
+    draw(false)
+
+    this.add.text(mx, my - 14, '🛒 Merchant Voss', {
+      fontSize: '11px', color: '#D4AF37', fontFamily: 'serif', fontStyle: 'bold',
+    }).setOrigin(0.5, 0).setDepth(7)
+
+    this.add.text(mx, my + 2, 'Booster Pack — 50g', {
+      fontSize: '9px', color: '#A09060', fontFamily: 'serif',
+    }).setOrigin(0.5, 0).setDepth(7)
+
+    const btn = this.add.zone(mx, my, 128, 52).setDepth(8)
+    btn.setInteractive({ cursor: 'pointer' })
+    btn.on('pointerover', () => draw(true))
+    btn.on('pointerout',  () => draw(false))
+    btn.on('pointerdown', () => {
+      this.game.events.emit('shopOpen')
+    })
   }
 }

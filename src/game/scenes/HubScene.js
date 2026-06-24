@@ -102,6 +102,19 @@ const NPC_DEFS = [
     ],
     battle: { npcName: 'Shade Duskren', color: 'black', deckType: 'black', reward: 30 },
   },
+  {
+    key: 'shopkeeper',
+    texture: 'npc-merchant',
+    tileX: 21, tileY: 4,
+    tabColor: 0xC8961E,
+    name: 'Merchant Voss',
+    dialog: [
+      'Welcome, initiate. I deal in rare cards — knowledge has its price.',
+      'A Booster Pack costs 50 gold. Five cards drawn from the full collection.',
+      'Spend wisely.',
+    ],
+    shop: true,
+  },
 ]
 
 export default class HubScene extends Phaser.Scene {
@@ -516,6 +529,16 @@ export default class HubScene extends Phaser.Scene {
           yoyo: true,
           repeat: -1,
         })
+      } else if (npc.def.key === 'shopkeeper') {
+        // Slow weight-shift side to side — busy counting coins
+        this.tweens.add({
+          targets: npc.sprite,
+          x: npc.sprite.x + 4,
+          duration: 1400,
+          ease: 'Sine.easeInOut',
+          yoyo: true,
+          repeat: -1,
+        })
       } else if (npc.def.key === 'green-ranger') {
         // Side-to-side weight shift
         this.tweens.add({
@@ -756,6 +779,10 @@ export default class HubScene extends Phaser.Scene {
         this.time.delayedCall(100, () => {
           this.game.events.emit('battleStart', npc.def.battle)
         })
+      } else if (npc.def.shop) {
+        this.time.delayedCall(100, () => {
+          this.game.events.emit('shopOpen')
+        })
       }
     }
   }
@@ -827,7 +854,7 @@ export default class HubScene extends Phaser.Scene {
   updateNPCPrompts() {
     const nearby = this.getNearbyNPC()
     if (nearby && !this.dialogState) {
-      const label = nearby.def.battle ? '[E] Duel' : '[E] Talk'
+      const label = nearby.def.battle ? '[E] Duel' : nearby.def.shop ? '[E] Shop' : '[E] Talk'
       this.promptLabel.setText(label)
       this.promptLabel.setVisible(true)
       this.promptLabel.setPosition(

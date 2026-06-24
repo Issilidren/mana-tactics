@@ -32,6 +32,7 @@ export default class BootScene extends Phaser.Scene {
     this.load.image('npc-red',       'assets/sprites/npc-red.png')
     this.load.image('npc-green',     'assets/sprites/npc-green.png')
     this.load.image('npc-librarian', 'assets/sprites/npc-librarian.png')
+    this.load.image('npc-merchant',  'assets/sprites/npc-merchant.png')
   }
 
   create() {
