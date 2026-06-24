@@ -1,3 +1,19 @@
+/* game input placeholder — muted blue-cream */
+.game-input::placeholder {
+  color: rgba(112,144,176,0.6);
+  font-style: italic;
+}
+
+/* kill browser autofill background — match dark input bg */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0px 1000px rgba(8,14,26,0.92) inset !important;
+  -webkit-text-fill-color: rgba(240,238,216,0.95) !important;
+  transition: background-color 5000s ease-in-out 0s;
+  caret-color: #D4AF37;
+}
+
 :root {
   --bg: #102030;        /* GBC dark navy */
   --surface: #1A3048;   /* GBC panel navy */

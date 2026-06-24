@@ -2,19 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import api from '../lib/axios'
-
-// ── Card frame palette ─────────────────────────────────────────
-const FRAME = {
-  white:     { border:'#C8A820', glow:'#F0D050', header:'#E8D060', headerText:'#1a1000', art1:'#F0E8A0', art2:'#C8A030' },
-  blue:      { border:'#1144AA', glow:'#4488EE', header:'#1A66CC', headerText:'#DDEEFF', art1:'#4488EE', art2:'#0A2288' },
-  black:     { border:'#8833CC', glow:'#BB66FF', header:'#5522AA', headerText:'#EEE0FF', art1:'#9955CC', art2:'#1A0830' },
-  red:       { border:'#CC2200', glow:'#FF5533', header:'#EE3311', headerText:'#FFEEEE', art1:'#FF6633', art2:'#881100' },
-  green:     { border:'#117711', glow:'#44DD44', header:'#228833', headerText:'#EEFFEE', art1:'#55CC44', art2:'#114411' },
-  colorless: { border:'#666677', glow:'#9999AA', header:'#888899', headerText:'#FFFFFF', art1:'#BBBBCC', art2:'#555566' },
-}
-
-// ── Art crop URL (frameless Scryfall artwork) ────────────────────────
-function artUrl(url) { return url?.replace('/small/', '/art_crop/') ?? null }
+import { FRAME, artUrl } from '../lib/cardUtils'
 
 // ── Per-color per-type art symbol (fallback when no image) ────────────────
 const SYM = {
@@ -817,7 +805,8 @@ export default function Home() {
 
   async function handleIncrement(card) {
     const e = deckCardMap[card.id]
-    if (!e || e.quantity >= 3) return
+    if (!e) return
+    if (card.type !== 'land' && e.quantity >= 3) return
     try {
       await api.patch(`/deck_cards?id=eq.${e.deckCardId}`, { quantity: e.quantity + 1 })
       await fetchDeckCards(selectedId)
@@ -1123,7 +1112,7 @@ export default function Home() {
                 {filtered.map(card => {
                   const entry = deckCardMap[card.id]
                   const qty   = entry?.quantity ?? 0
-                  const canAdd = !!selectedId && qty < 3
+                  const canAdd = !!selectedId && (card.type === 'land' ? true : qty < 3)
                   return (
                     <MiniCard key={card.id} card={card} qty={qty} canAdd={canAdd}
                       onAdd={() => qty === 0 ? handleAddCard(card) : handleIncrement(card)}
@@ -1196,7 +1185,9 @@ export default function Home() {
                     return (
                       <div key={dc.id}
                         title={`${card.name} ×${dc.quantity}`}
-                        onClick={() => handleDecrement(card)}
+                        onClick={() => { const en = deckCardMap[card.id]; if (en && (card.type === 'land' || en.quantity < 3)) handleIncrement(card) }}
+                        onMouseEnter={e => setHovered({ card, rect: e.currentTarget.getBoundingClientRect() })}
+                        onMouseLeave={() => setHovered(null)}
                         style={{
                           aspectRatio: '1/1', position: 'relative', borderRadius: 4, overflow: 'hidden',
                           cursor: 'pointer', border: `1px solid ${f.border}55`,
@@ -1206,11 +1197,14 @@ export default function Home() {
                           <img src={art} alt={card.name}
                             style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', objectPosition:'center top' }} />
                         )}
-                        <div style={{
+                        <div
+                          onClick={e => { e.stopPropagation(); handleDecrement(card) }}
+                          style={{
                           position: 'absolute', bottom: 0, right: 0,
                           background: '#D4AF37', color: '#0A0E1A',
                           fontSize: '0.38rem', fontWeight: 'bold', padding: '1px 3px',
                           borderRadius: '3px 0 0 0', lineHeight: 1.2,
+                          cursor: 'pointer',
                         }}>×{dc.quantity}</div>
                         {card.mana_cost && (() => {
                           const mc = Object.values(card.mana_cost).reduce((s,v)=>s+(v||0),0)
@@ -1242,7 +1236,9 @@ export default function Home() {
                     return (
                       <div key={dc.id}
                         title={`${card.name} ×${dc.quantity}`}
-                        onClick={() => handleDecrement(card)}
+                        onClick={() => { const en = deckCardMap[card.id]; if (en && (card.type === 'land' || en.quantity < 3)) handleIncrement(card) }}
+                        onMouseEnter={e => setHovered({ card, rect: e.currentTarget.getBoundingClientRect() })}
+                        onMouseLeave={() => setHovered(null)}
                         style={{
                           aspectRatio: '1/1', position: 'relative', borderRadius: 4, overflow: 'hidden',
                           cursor: 'pointer', border: `1px solid ${f.border}55`,
@@ -1252,11 +1248,14 @@ export default function Home() {
                           <img src={art} alt={card.name}
                             style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', objectPosition:'center top' }} />
                         )}
-                        <div style={{
+                        <div
+                          onClick={e => { e.stopPropagation(); handleDecrement(card) }}
+                          style={{
                           position: 'absolute', bottom: 0, right: 0,
                           background: '#D4AF37', color: '#0A0E1A',
                           fontSize: '0.38rem', fontWeight: 'bold', padding: '1px 3px',
                           borderRadius: '3px 0 0 0', lineHeight: 1.2,
+                          cursor: 'pointer',
                         }}>×{dc.quantity}</div>
                         {card.mana_cost && (() => {
                           const mc = Object.values(card.mana_cost).reduce((s,v)=>s+(v||0),0)
@@ -1288,7 +1287,9 @@ export default function Home() {
                     return (
                       <div key={dc.id}
                         title={`${card.name} ×${dc.quantity}`}
-                        onClick={() => handleDecrement(card)}
+                        onClick={() => { const en = deckCardMap[card.id]; if (en && (card.type === 'land' || en.quantity < 3)) handleIncrement(card) }}
+                        onMouseEnter={e => setHovered({ card, rect: e.currentTarget.getBoundingClientRect() })}
+                        onMouseLeave={() => setHovered(null)}
                         style={{
                           aspectRatio: '1/1', position: 'relative', borderRadius: 4, overflow: 'hidden',
                           cursor: 'pointer', border: `1px solid ${f.border}55`,
@@ -1298,11 +1299,14 @@ export default function Home() {
                           <img src={art} alt={card.name}
                             style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', objectPosition:'center top' }} />
                         )}
-                        <div style={{
+                        <div
+                          onClick={e => { e.stopPropagation(); handleDecrement(card) }}
+                          style={{
                           position: 'absolute', bottom: 0, right: 0,
                           background: '#D4AF37', color: '#0A0E1A',
                           fontSize: '0.38rem', fontWeight: 'bold', padding: '1px 3px',
                           borderRadius: '3px 0 0 0', lineHeight: 1.2,
+                          cursor: 'pointer',
                         }}>×{dc.quantity}</div>
                       </div>
                     )
@@ -1323,7 +1327,9 @@ export default function Home() {
                     return (
                       <div key={dc.id}
                         title={`${card.name} ×${dc.quantity}`}
-                        onClick={() => handleDecrement(card)}
+                        onClick={() => { const en = deckCardMap[card.id]; if (en && (card.type === 'land' || en.quantity < 3)) handleIncrement(card) }}
+                        onMouseEnter={e => setHovered({ card, rect: e.currentTarget.getBoundingClientRect() })}
+                        onMouseLeave={() => setHovered(null)}
                         style={{
                           aspectRatio: '1/1', position: 'relative', borderRadius: 4, overflow: 'hidden',
                           cursor: 'pointer', border: `1px solid ${f.border}55`,
@@ -1333,11 +1339,14 @@ export default function Home() {
                           <img src={art} alt={card.name}
                             style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', objectPosition:'center top' }} />
                         )}
-                        <div style={{
+                        <div
+                          onClick={e => { e.stopPropagation(); handleDecrement(card) }}
+                          style={{
                           position: 'absolute', bottom: 0, right: 0,
                           background: '#D4AF37', color: '#0A0E1A',
                           fontSize: '0.38rem', fontWeight: 'bold', padding: '1px 3px',
                           borderRadius: '3px 0 0 0', lineHeight: 1.2,
+                          cursor: 'pointer',
                         }}>×{dc.quantity}</div>
                       </div>
                     )

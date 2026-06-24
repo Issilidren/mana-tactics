@@ -15,6 +15,15 @@ export default class BootScene extends Phaser.Scene {
     this.load.image('tile-wall',  'assets/tiles/wall.png')
     this.load.image('tile-door',  'assets/tiles/door.png')
 
+    // Background images
+    this.load.image('worldmap-bg',   'assets/worldmap-bg.png')
+    this.load.image('hub-bg',        'assets/hub-bg.png')
+    this.load.image('club-white-bg', 'assets/club-white-bg.png')
+    this.load.image('club-blue-bg',  'assets/club-blue-bg.png')
+    this.load.image('club-black-bg', 'assets/club-black-bg.png')
+    this.load.image('club-red-bg',   'assets/club-red-bg.png')
+    this.load.image('club-green-bg', 'assets/club-green-bg.png')
+
     // Character sprites
     this.load.image('player',        'assets/sprites/player.png')
     this.load.image('npc-white',     'assets/sprites/npc-white.png')

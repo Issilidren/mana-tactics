@@ -993,7 +993,7 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
               syncState()
             })
           }}
-          onRetreat={() => onBattleEnd({ winner: 'ai', reward: 0 })}
+          onRetreat={() => onBattleEnd({ winner: 'ai', reward: 0, hpDamage: 1 })}
         />
       )}
 

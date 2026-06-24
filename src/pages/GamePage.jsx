@@ -4,11 +4,8 @@ import { useAuth } from '../context/AuthContext'
 import api from '../lib/axios'
 import PhaserGame from '../game/PhaserGame'
 import BattleScreen from '../game/BattleScreen'
+import ShopOverlay from '../game/ShopOverlay'
 
-const STORAGE_KEY_GOLD  = 'mt_gold'
-const STORAGE_KEY_SEALS = 'mt_seals'
-
-// Starter deck templates — card counts per type when auto-building
 const STARTER_NAMES = {
   white: "Dawn's Shield",
   blue:  "Mind's Reach",
@@ -17,41 +14,67 @@ const STARTER_NAMES = {
   green: "Wild's Call",
 }
 
-function loadProgress() {
-  return {
-    gold:  parseInt(localStorage.getItem(STORAGE_KEY_GOLD)  ?? '0', 10),
-    seals: JSON.parse(localStorage.getItem(STORAGE_KEY_SEALS) ?? '[]'),
-  }
-}
-
-function saveProgress(gold, seals) {
-  localStorage.setItem(STORAGE_KEY_GOLD,  String(gold))
-  localStorage.setItem(STORAGE_KEY_SEALS, JSON.stringify(seals))
-}
-
 export default function GamePage() {
-  const { user }     = useAuth()
-  const navigate     = useNavigate()
-  const gameRef      = useRef(null)   // set by PhaserGame via callback
+  const { user }  = useAuth()
+  const navigate  = useNavigate()
+  const gameRef   = useRef(null)
 
   const [playerCards, setPlayerCards]   = useState([])
   const [loading, setLoading]           = useState(true)
   const [activeBattle, setActiveBattle] = useState(null)
-  const [progress, setProgress]         = useState(loadProgress)
+  const [shopOpen, setShopOpen]         = useState(false)
+  const [shopListing, setShopListing]   = useState(null)
+  const [progress, setProgress]         = useState(() => ({
+    gold:  parseInt(localStorage.getItem('mt_gold')  ?? '0', 10),
+    seals: JSON.parse(localStorage.getItem('mt_seals') ?? '[]'),
+    hp:    10,
+  }))
 
-  // Load most-recent deck on mount and auto-select it
   useEffect(() => {
     if (!user) return
     loadLatestDeck()
-  }, [user])
+    fetchProgress()
+    fetchShopListing()
+  }, [user])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function fetchProgress() {
+    try {
+      const res = await api.get(`/player_profiles?user_id=eq.${user.id}&limit=1`)
+      if (res.data.length) {
+        const p = res.data[0]
+        setProgress({ gold: p.gold, hp: p.hp, seals: p.seals ?? [] })
+      } else {
+        await api.post('/player_profiles',
+          { user_id: user.id, gold: 0, hp: 10, seals: [] },
+          { headers: { Prefer: 'resolution=merge-duplicates,return=representation' } }
+        )
+      }
+    } catch (_) {}
+  }
+
+  async function saveProgress(gold, hp, seals) {
+    try {
+      await api.post('/player_profiles',
+        { user_id: user.id, gold, hp, seals, updated_at: new Date().toISOString() },
+        { headers: { Prefer: 'resolution=merge-duplicates,return=representation' } }
+      )
+    } catch (_) {}
+    localStorage.setItem('mt_gold',  String(gold))
+    localStorage.setItem('mt_seals', JSON.stringify(seals))
+  }
+
+  async function fetchShopListing() {
+    try {
+      const res = await api.get('/shop_listings?available=eq.true&limit=1')
+      if (res.data.length) setShopListing(res.data[0])
+    } catch (_) {}
+  }
 
   async function loadLatestDeck() {
     setLoading(true)
     try {
       const res = await api.get(`/decks?user_id=eq.${user.id}&order=updated_at.desc&limit=1`)
-      if (res.data.length > 0) {
-        await loadDeckCards(res.data[0].id)
-      }
+      if (res.data.length > 0) await loadDeckCards(res.data[0].id)
     } catch (_) {}
     setLoading(false)
   }
@@ -60,93 +83,83 @@ export default function GamePage() {
     const res = await api.get(`/deck_cards?deck_id=eq.${deckId}&select=*,cards(*)`)
     const flat = []
     for (const entry of res.data) {
-      for (let i = 0; i < (entry.quantity ?? 1); i++) {
-        flat.push({ ...entry.cards })
-      }
+      for (let i = 0; i < (entry.quantity ?? 1); i++) flat.push({ ...entry.cards })
     }
     setPlayerCards(flat)
   }
 
-  // Create a starter deck in Supabase when StarterPickScene emits the event
   async function handleStarterPicked({ color }) {
     try {
-      const name = STARTER_NAMES[color] ?? 'Starter Deck'
-
-      // Create the deck
-      const deckRes = await api.post('/decks', {
-        user_id: user.id,
-        name,
-        color,
-        description: `Your first deck — ${name}`,
-      })
-      const deck = deckRes.data[0]
+      const name    = STARTER_NAMES[color] ?? 'Starter Deck'
+      const deckRes = await api.post('/decks', { user_id: user.id, name, color, description: `Your first deck — ${name}` })
+      const deck    = deckRes.data[0]
       if (!deck) return
-
-      // Pull creatures + spells of that color (max 20), add at quantity 2
-      const cardRes = await api.get(
-        `/cards?color=eq.${color}&type=neq.land&order=rarity.desc&limit=18`
-      )
-      if (cardRes.data.length > 0) {
-        const inserts = cardRes.data.map(c => ({
-          deck_id: deck.id, card_id: c.id, quantity: 2,
-        }))
-        await api.post('/deck_cards', inserts)
-      }
-
-      // Also grab some lands (colorless or matching)
+      const cardRes = await api.get(`/cards?color=eq.${color}&type=neq.land&order=rarity.desc&limit=18`)
+      if (cardRes.data.length)
+        await api.post('/deck_cards', cardRes.data.map(c => ({ deck_id: deck.id, card_id: c.id, quantity: 2 })))
       const landRes = await api.get(`/cards?type=eq.land&color=eq.${color}&limit=4`)
-      if (landRes.data.length > 0) {
-        const landInserts = landRes.data.map(c => ({
-          deck_id: deck.id, card_id: c.id, quantity: 3,
-        }))
-        await api.post('/deck_cards', landInserts)
-      }
-
+      if (landRes.data.length)
+        await api.post('/deck_cards', landRes.data.map(c => ({ deck_id: deck.id, card_id: c.id, quantity: 3 })))
       await loadDeckCards(deck.id)
     } catch (_) {}
   }
 
-  function handleBattleStart(npcData) {
-    setActiveBattle(npcData)
-  }
+  function handleBattleStart(npcData) { setActiveBattle(npcData) }
 
-  function handleBattleEnd({ winner, reward }) {
+  function handleBattleEnd({ winner, reward, hpDamage = 0 }) {
+    const color = activeBattle?.color
     setActiveBattle(null)
+    let next
     if (winner === 'player') {
       const newGold  = progress.gold + (reward ?? 0)
-      const newSeals = progress.seals.includes(activeBattle?.color)
+      const newSeals = progress.seals.includes(color)
         ? progress.seals
-        : [...progress.seals, activeBattle?.color].filter(Boolean)
-      const next = { gold: newGold, seals: newSeals }
-      setProgress(next)
-      saveProgress(next.gold, next.seals)
+        : [...progress.seals, color].filter(Boolean)
+      next = { gold: newGold, hp: progress.hp, seals: newSeals }
+    } else {
+      next = { gold: progress.gold, hp: Math.max(1, progress.hp - hpDamage), seals: progress.seals }
     }
+    setProgress(next)
+    saveProgress(next.gold, next.hp, next.seals)
+  }
+
+  async function handleBuyPack() {
+    if (!shopListing || progress.gold < shopListing.gold_price) return []
+    try {
+      const offset = Math.floor(Math.random() * 315)
+      const [cardsRes] = await Promise.all([
+        api.get(`/cards?order=id.asc&limit=5&offset=${offset}`),
+        api.post('/purchases', {
+          user_id: user.id, listing_id: shopListing.id, gold_spent: shopListing.gold_price,
+        }),
+      ])
+      const next = { ...progress, gold: progress.gold - shopListing.gold_price }
+      setProgress(next)
+      saveProgress(next.gold, next.hp, next.seals)
+      return cardsRes.data
+    } catch (_) { return [] }
   }
 
   if (loading) return (
     <div style={styles.center}>
-      <p style={{ color: '#D4AF37', fontFamily: 'monospace', letterSpacing: 2 }}>
-        Loading…
-      </p>
+      <p style={{ color: '#D4AF37', fontFamily: 'monospace', letterSpacing: 2 }}>Loading…</p>
     </div>
   )
 
   return (
     <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: '#080510' }}>
       <PhaserGame
-        user={{ ...user, gold: progress.gold, seals: progress.seals, hp: 10 }}
+        user={{ ...user, gold: progress.gold, seals: progress.seals, hp: progress.hp }}
         playerDeck={playerCards}
         onBattleStart={handleBattleStart}
         onStarterPicked={handleStarterPicked}
+        onShopOpen={() => setShopOpen(true)}
         onExitGame={() => navigate('/')}
         onGameReady={(game) => { gameRef.current = game }}
       />
 
       {activeBattle && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 200,
-          background: 'rgba(0,0,0,0.92)',
-        }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.92)' }}>
           <BattleScreen
             npcData={activeBattle}
             playerDeck={playerCards}
@@ -155,14 +168,19 @@ export default function GamePage() {
           />
         </div>
       )}
+
+      {shopOpen && (
+        <ShopOverlay
+          listing={shopListing}
+          gold={progress.gold}
+          onBuyPack={handleBuyPack}
+          onClose={() => setShopOpen(false)}
+        />
+      )}
     </div>
   )
 }
 
 const styles = {
-  center: {
-    width: '100vw', height: '100vh',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    background: '#080510',
-  },
+  center: { width: '100vw', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#080510' },
 }

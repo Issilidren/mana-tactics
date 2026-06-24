@@ -34,6 +34,7 @@ const CONFIGS = {
   // ── WHITE: Solara Plains Club ──────────────────────────────────────────────
   ClubWhite: {
     key: 'ClubWhite',
+    bgKey: 'club-white-bg',
     name: 'SOLARA PLAINS CLUB',
     palette: {
       floor: 0xF4F0E4, floorGrid: 0xDDD8C4,
@@ -69,6 +70,7 @@ const CONFIGS = {
   // ── BLUE: Tidefall Isles Club ──────────────────────────────────────────────
   ClubBlue: {
     key: 'ClubBlue',
+    bgKey: 'club-blue-bg',
     name: 'TIDEFALL ISLES CLUB',
     palette: {
       floor: 0xD4DCF0, floorGrid: 0xB8C8E4,
@@ -106,6 +108,7 @@ const CONFIGS = {
   // ── BLACK: Shadowmere Bog Club ─────────────────────────────────────────────
   ClubBlack: {
     key: 'ClubBlack',
+    bgKey: 'club-black-bg',
     name: 'SHADOWMERE BOG CLUB',
     palette: {
       floor: 0x201828, floorGrid: 0x302038,
@@ -139,6 +142,7 @@ const CONFIGS = {
   // ── RED: Embercrest Peaks Club ─────────────────────────────────────────────
   ClubRed: {
     key: 'ClubRed',
+    bgKey: 'club-red-bg',
     name: 'EMBERCREST PEAKS CLUB',
     palette: {
       floor: 0xF2E0D8, floorGrid: 0xE4C8C0,
@@ -176,6 +180,7 @@ const CONFIGS = {
   // ── GREEN: Thornveil Woods Club ────────────────────────────────────────────
   ClubGreen: {
     key: 'ClubGreen',
+    bgKey: 'club-green-bg',
     name: 'THORNVEIL WOODS CLUB',
     palette: {
       floor: 0xD4F0D0, floorGrid: 0xB8E0B4,
@@ -235,12 +240,15 @@ class ClubScene extends Phaser.Scene {
     this.dialogState   = null
     this.npcs          = []
 
+    // PNG background (baked-in floor, furniture, carpet, bookshelves)
+    this.add.image(0, 0, this.cfg.bgKey).setOrigin(0, 0).setDepth(0)
+
     const walkable = MAP.map(row => Array.from(row).map(ch => ch !== 'W'))
-    this.drawFloor(walkable)
-    this.drawFurniture()
+    this.drawFloor(walkable).setAlpha(0)   // invisible — physics walls still active
     this.drawPortalDoor()
     this.createPlayer()
     this.createNPCs()
+    this.startNPCBehaviors()
     this.setupCamera()
     this.setupInput()
     this.createUI()
@@ -274,151 +282,8 @@ class ClubScene extends Phaser.Scene {
         }
       }
     }
-  }
 
-  // ── Furniture ──────────────────────────────────────────────────────────────
-
-  drawFurniture() {
-    const p = this.cfg.palette
-    const g = this.add.graphics().setDepth(2)
-
-    // ── Archmage podium (spans full top, rows 1-2) ────────────────────────────
-    const podX = TILE, podY = TILE
-    const podW = (COLS - 2) * TILE, podH = 2 * TILE
-
-    g.fillStyle(p.podiumDark)
-    g.fillRect(podX, podY, podW, podH)
-    // Column pattern
-    for (let ci = 0; ci < 7; ci++) {
-      const cx = podX + ci * (podW / 6)
-      g.fillStyle(p.podium)
-      g.fillRect(cx, podY, TILE / 2, podH)
-      g.fillStyle(0xFFFFFF, 0.12)
-      g.fillRect(cx, podY, 3, podH)
-    }
-    // Surface bar
-    g.fillStyle(p.podium)
-    g.fillRect(podX, podY + podH - 10, podW, 10)
-    // Gold border
-    g.lineStyle(3, 0xD4AF37, 1)
-    g.strokeRect(podX, podY, podW, podH)
-    // Corner gems
-    g.fillStyle(0xD4AF37)
-    g.fillRect(podX, podY, 7, 7)
-    g.fillRect(podX + podW - 7, podY, 7, 7)
-
-    // Club name on podium
-    this.add.text(COLS * TILE / 2, podY + podH / 2, this.cfg.name, {
-      fontSize: '11px', color: '#D4AF37',
-      fontFamily: 'monospace', fontStyle: 'bold',
-    }).setOrigin(0.5, 0.5).setDepth(3)
-
-    // ── Center duel carpet ────────────────────────────────────────────────────
-    const cX = 8 * TILE, cY = 6 * TILE
-    const cW = 9 * TILE, cH = 6 * TILE
-
-    g.fillStyle(p.carpet)
-    g.fillRect(cX, cY, cW, cH)
-    // Grid
-    g.lineStyle(1, p.carpetGrid, 0.5)
-    for (let ci = 1; ci < 9; ci++) g.lineBetween(cX + ci * TILE, cY, cX + ci * TILE, cY + cH)
-    for (let ri = 1; ri < 6; ri++) g.lineBetween(cX, cY + ri * TILE, cX + cW, cY + ri * TILE)
-    // Center line
-    g.lineStyle(2, 0xFFFFFF, 0.25)
-    g.lineBetween(cX, cY + cH / 2, cX + cW, cY + cH / 2)
-    // Border
-    g.lineStyle(3, p.carpetBorder, 1)
-    g.strokeRect(cX, cY, cW, cH)
-    // Corner gems
-    g.fillStyle(p.carpetBorder)
-    for (const [gx, gy] of [[cX-3,cY-3],[cX+cW-4,cY-3],[cX-3,cY+cH-4],[cX+cW-4,cY+cH-4]])
-      g.fillRect(gx, gy, 7, 7)
-
-    // ── Tables in the wing areas ──────────────────────────────────────────────
-    this.drawTable(g, 4,  6)   // upper-left wing
-    this.drawTable(g, 20, 6)   // upper-right wing
-    this.drawTable(g, 4,  11)  // lower-left wing
-    this.drawTable(g, 20, 11)  // lower-right wing
-
-    // ── Bookshelves (right wall) ──────────────────────────────────────────────
-    this.drawShelf(g, 23, 3, 4)
-    this.drawShelf(g, 23, 9, 4)
-
-    // ── Potted plants (left wall accents) ────────────────────────────────────
-    this.drawPlant(g, 1, 5)
-    this.drawPlant(g, 1, 9)
-    this.drawPlant(g, 1, 13)
-  }
-
-  drawTable(g, col, row) {
-    const cx = col * TILE + TILE / 2
-    const cy = row * TILE + TILE / 2
-    const R = 18
-    // Shadow
-    g.fillStyle(0x000000, 0.22)
-    g.fillCircle(cx + 3, cy + 3, R)
-    // Surface
-    g.fillStyle(0x8B5A2A)
-    g.fillCircle(cx, cy, R)
-    g.lineStyle(2, 0x5A3010, 1)
-    g.strokeCircle(cx, cy, R)
-    // Wood grain
-    g.fillStyle(0xA07040, 0.45)
-    g.fillCircle(cx - 3, cy - 3, 8)
-    // Gold rim
-    g.lineStyle(1, 0xD4AF37, 0.4)
-    g.strokeCircle(cx, cy, R - 2)
-    // Four chairs
-    for (const [dx, dy] of [[0, -(R+10)], [0, R+10], [-(R+10), 0], [R+10, 0]]) {
-      g.fillStyle(0x6A4020)
-      g.fillRect(cx + dx - 6, cy + dy - 6, 12, 12)
-      g.fillStyle(0x8A6040, 0.5)
-      g.fillRect(cx + dx - 5, cy + dy - 5, 5, 5)
-      g.lineStyle(1, 0x4A2010, 1)
-      g.strokeRect(cx + dx - 6, cy + dy - 6, 12, 12)
-    }
-  }
-
-  drawShelf(g, col, rowStart, rowCount) {
-    const x = col * TILE, y = rowStart * TILE
-    const w = TILE, h = rowCount * TILE
-    g.fillStyle(0x4A2E10)
-    g.fillRect(x, y, w, h)
-    const colors = [0xCC2200, 0x2255AA, 0x228822, 0x6633AA, 0xCC8800, 0xFF6600, 0x005588, 0xAA0044]
-    let ci = 0
-    for (let shelf = 0; shelf < rowCount; shelf++) {
-      g.fillStyle(0x7A5030)
-      g.fillRect(x, y + shelf * TILE - 3, w, 5)
-      const sy = y + shelf * TILE + 5, sh = TILE - 10
-      let bx = x + 2
-      while (bx < x + w - 3) {
-        const bw = 5 + (ci * 3) % 5
-        g.fillStyle(colors[ci % colors.length])
-        g.fillRect(bx, sy, bw, sh)
-        g.fillStyle(0xFFFFFF, 0.1)
-        g.fillRect(bx + 1, sy, 1, sh)
-        bx += bw + 1; ci++
-      }
-    }
-    g.lineStyle(2, 0xD4AF37, 0.65)
-    g.strokeRect(x, y, w, h)
-  }
-
-  drawPlant(g, col, row) {
-    const cx = col * TILE + TILE / 2
-    const cy = row * TILE + TILE / 2
-    g.fillStyle(0x8B5A2A)
-    g.fillRect(cx - 8, cy + 2, 16, 12)
-    g.lineStyle(1, 0xD4AF37, 0.5)
-    g.strokeRect(cx - 8, cy + 2, 16, 12)
-    g.fillStyle(0x5A3010)
-    g.fillRect(cx - 6, cy + 2, 12, 4)
-    g.fillStyle(0x228822)
-    g.fillCircle(cx, cy - 5, 10)
-    g.fillCircle(cx - 7, cy + 1, 7)
-    g.fillCircle(cx + 7, cy + 1, 7)
-    g.fillStyle(0x44BB44, 0.45)
-    g.fillCircle(cx - 3, cy - 7, 5)
+    return g
   }
 
   // ── Portal door (exit to World Map) ────────────────────────────────────────
@@ -498,6 +363,39 @@ class ClubScene extends Phaser.Scene {
         sprite: this.add.sprite(mx, my, m.texture).setScale(0.65).setDepth(9),
       })
     }
+  }
+
+  // ── NPC behaviors ────────────────────────────────────────────────────────────
+
+  startNPCBehaviors() {
+    // Archmage stays still — members get varied movement by index
+    const members = this.npcs.filter(n => n.def !== this.cfg.archmage)
+    members.forEach((npc, i) => {
+      const base = { targets: npc.sprite, repeat: -1, yoyo: true }
+      if (i % 3 === 0) {
+        // Slow vertical patrol — wander up/down 3 tiles
+        this.tweens.add({ ...base,
+          y: npc.sprite.y + 3 * 32,
+          duration: 3200 + i * 400,
+          ease: 'Linear',
+          hold: 1200,
+        })
+      } else if (i % 3 === 1) {
+        // Side-to-side weight shift
+        this.tweens.add({ ...base,
+          x: npc.sprite.x + 8,
+          duration: 1000 + i * 200,
+          ease: 'Sine.easeInOut',
+        })
+      } else {
+        // Gentle idle bob
+        this.tweens.add({ ...base,
+          y: npc.sprite.y + 5,
+          duration: 700 + i * 150,
+          ease: 'Sine.easeInOut',
+        })
+      }
+    })
   }
 
   // ── Camera ─────────────────────────────────────────────────────────────────

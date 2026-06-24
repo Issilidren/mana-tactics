@@ -111,6 +111,7 @@ export default class HubScene extends Phaser.Scene {
     this.promptLabel = null
     this.eKey = null
     this.portalBounds = null
+    this.shopBounds = null
     this.statsText = null
     this.transitioning = false   // CRITICAL: prevents portal from firing every frame
     this.minimapGfx = null
@@ -170,6 +171,8 @@ export default class HubScene extends Phaser.Scene {
 
     // Portal trigger zone — col 12 center=400, row 16 center=528
     this.portalBounds = new Phaser.Geom.Rectangle(360, 518, 80, 30)
+    // Card shop interaction zone — cols 19-22, rows 5-6 front edge
+    this.shopBounds = new Phaser.Geom.Rectangle(600, 185, 112, 45)
   }
 
   // ── Fountain (FFTA-style centrepiece) ─────────────────────────────────────
@@ -768,7 +771,15 @@ export default class HubScene extends Phaser.Scene {
       return
     }
     const nearby = this.getNearbyNPC()
-    if (nearby) this.openDialog(nearby)
+    if (nearby) { this.openDialog(nearby); return }
+    if (this.isNearShop()) {
+      this.game.events.emit('shopOpen')
+    }
+  }
+
+  isNearShop() {
+    if (!this.shopBounds) return false
+    return this.shopBounds.contains(this.player.x, this.player.y)
   }
 
   getNearbyNPC() {
@@ -819,6 +830,10 @@ export default class HubScene extends Phaser.Scene {
         nearby.sprite.x - this.promptLabel.width / 2,
         nearby.sprite.y - 36,
       )
+    } else if (this.isNearShop() && !this.dialogState) {
+      this.promptLabel.setText('[E] Shop')
+      this.promptLabel.setVisible(true)
+      this.promptLabel.setPosition(648 - this.promptLabel.width / 2, 172)
     } else {
       this.promptLabel.setVisible(false)
     }
