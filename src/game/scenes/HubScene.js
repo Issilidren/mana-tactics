@@ -113,19 +113,21 @@ export default class HubScene extends Phaser.Scene {
     this.portalBounds = null
     this.statsText = null
     this.transitioning = false   // CRITICAL: prevents portal from firing every frame
+    this.minimapGfx = null
+    this.minimapPlayerDot = null
   }
 
   create() {
     this.transitioning = false
     const walkable = this.buildWalkableMap()
-    this.drawMap(walkable)
-    this.drawFurniture()
-    this.drawPortalDoor()
+    this.drawMap(walkable)           // renders hub-bg.png + wall physics bodies
+    // drawFurniture() and drawPortalDoor() removed — all furniture/portal art is baked into hub-bg.png
     this.createPlayer()
     this.createNPCs()
     this.setupCamera()
     this.setupInput()
     this.createUI()
+    this.startNPCBehaviors()
   }
 
   // ── Walkable grid ──────────────────────────────────────────────────────────
@@ -147,19 +149,27 @@ export default class HubScene extends Phaser.Scene {
   drawMap(walkable) {
     this.wallGroup = this.physics.add.staticGroup()
 
+    // Rich pre-generated background image (replaces individual tile sprites)
+    const bg = this.add.image(0, 0, 'hub-bg').setOrigin(0, 0).setDepth(0)
+    bg.setDisplaySize(COLS * TILE, ROWS * TILE)
+
+    // Invisible wall colliders (physics bodies only, no visible sprites)
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
-        const x = c * TILE + TILE / 2
-        const y = r * TILE + TILE / 2
         if (!walkable[r][c]) {
+          const x = c * TILE + TILE / 2
+          const y = r * TILE + TILE / 2
+          // Use tile-wall texture but hide it; hub-bg image provides the visual
           const wall = this.wallGroup.create(x, y, 'tile-wall')
+          wall.setAlpha(0)
           wall.setOrigin(0.5, 0.5)
           wall.refreshBody()
-        } else {
-          this.add.image(x, y, 'tile-floor').setOrigin(0.5, 0.5).setDepth(0)
         }
       }
     }
+
+    // Portal trigger zone — col 12 center=400, row 16 center=528
+    this.portalBounds = new Phaser.Geom.Rectangle(360, 518, 80, 30)
   }
 
   // ── Fountain (FFTA-style centrepiece) ─────────────────────────────────────
@@ -476,6 +486,43 @@ export default class HubScene extends Phaser.Scene {
     }
   }
 
+  startNPCBehaviors() {
+    for (const npc of this.npcs) {
+      if (npc.def.key === 'white-scholar') {
+        // Slow patrol between two y positions
+        this.tweens.add({
+          targets: npc.sprite,
+          y: npc.def.tileY * TILE + TILE / 2 + 3 * TILE,
+          duration: 3500,
+          ease: 'Linear',
+          yoyo: true,
+          repeat: -1,
+          hold: 1500,
+        })
+      } else if (npc.def.key === 'practice-duelist') {
+        // Gentle idle bob
+        this.tweens.add({
+          targets: npc.sprite,
+          y: npc.sprite.y + 4,
+          duration: 800,
+          ease: 'Sine.easeInOut',
+          yoyo: true,
+          repeat: -1,
+        })
+      } else if (npc.def.key === 'green-ranger') {
+        // Side-to-side weight shift
+        this.tweens.add({
+          targets: npc.sprite,
+          x: npc.sprite.x + 6,
+          duration: 1200,
+          ease: 'Sine.easeInOut',
+          yoyo: true,
+          repeat: -1,
+        })
+      }
+    }
+  }
+
   // ── Camera ─────────────────────────────────────────────────────────────────
 
   setupCamera() {
@@ -512,7 +559,7 @@ export default class HubScene extends Phaser.Scene {
     barBg.lineBetween(0, 22, COLS * TILE, 22)
 
     this.statsText = this.add.text(10, 4, '', {
-      fontSize: '12px',
+      fontSize: '13px',
       color: '#F0EED8',
       fontFamily: 'monospace',
     }).setScrollFactor(0).setDepth(21)
@@ -526,14 +573,85 @@ export default class HubScene extends Phaser.Scene {
       backgroundColor: '#F0EED8',
       padding: { x: 5, y: 2 },
     }).setDepth(30).setVisible(false)
+
+    this.drawMinimap()
   }
 
   updateStats() {
     const gold = this.registry.get('gold') ?? 0
     const seals = this.registry.get('seals') ?? []
-    const hp = this.registry.get('hp') ?? 10
-    const sealStr = '★'.repeat(seals.length) + '☆'.repeat(5 - seals.length)
-    this.statsText.setText(`HP: ${hp}   Gold: ${gold}   Seals: ${sealStr}`)
+    const hpDisplay = this.registry.get('hp') ?? 10
+    const hpFull  = Math.min(hpDisplay, 5)
+    const hpEmpty = Math.max(0, 5 - hpFull)
+    const hearts   = '❤'.repeat(hpFull) + '♡'.repeat(hpEmpty)
+    const sealStr  = '★'.repeat(seals.length) + '☆'.repeat(5 - seals.length)
+    this.statsText.setText(`${hearts}  ◆ ${gold}  ${sealStr}  ◉◉◉`)
+  }
+
+  drawMinimap() {
+    const MM_X = COLS * TILE - 88   // right side of HUD bar
+    const MM_Y = 1
+    const MM_W = 80
+    const MM_H = 20
+    const S = 3  // pixels per tile (25*3=75, 18*3=54 — fits in bar height at 1px scale)
+
+    // We draw a compact 25x7 slice (just enough to show room shape in 20px height)
+    // Scale: 3px wide, 2px tall per tile to fit in 80x18px
+    const SW = 3, SH = 1  // tile scale x, y
+
+    const g = this.add.graphics().setScrollFactor(0).setDepth(22)
+    // Background
+    g.fillStyle(0x0A0F1A)
+    g.fillRect(MM_X - 2, MM_Y, MM_W + 2, MM_H)
+    g.lineStyle(1, 0xD4AF37, 0.8)
+    g.strokeRect(MM_X - 2, MM_Y, MM_W + 2, MM_H)
+
+    // Draw room: iterate MAP array, warm tan for floor, dark for walls
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const ch = MAP[r]?.[c] ?? 'W'
+        const px = MM_X + c * SW
+        const py = MM_Y + 1 + Math.floor(r * (MM_H - 2) / ROWS)
+        if (ch === 'W') {
+          g.fillStyle(0x6B5B3E)
+        } else {
+          g.fillStyle(0xC4A265, 0.7)
+        }
+        g.fillRect(px, py, SW - 0, 1)
+      }
+    }
+
+    // Portal dot (teal) at bottom center
+    const portalDotX = MM_X + 12 * SW + 1
+    const portalDotY = MM_Y + MM_H - 3
+    g.fillStyle(0x37D3C4)
+    g.fillRect(portalDotX, portalDotY, 4, 2)
+
+    // NPC dots
+    for (const npc of this.npcs) {
+      const nx = MM_X + npc.def.tileX * SW + 1
+      const ny = MM_Y + 1 + Math.floor(npc.def.tileY * (MM_H - 2) / ROWS)
+      g.fillStyle(npc.def.tabColor)
+      g.fillRect(nx, ny, 2, 1)
+    }
+
+    this.minimapGfx = g
+
+    // Player dot (white, separate graphics so we can update it)
+    this.minimapPlayerDot = this.add.graphics().setScrollFactor(0).setDepth(23)
+  }
+
+  updateMinimap() {
+    if (!this.minimapPlayerDot || !this.player) return
+    const MM_X = COLS * TILE - 88
+    const MM_Y = 1
+    const MM_H = 20
+    const SW = 3
+    const px = MM_X + Math.floor((this.player.x / TILE) * SW)
+    const py = MM_Y + 1 + Math.floor((this.player.y / (ROWS * TILE)) * (MM_H - 2))
+    this.minimapPlayerDot.clear()
+    this.minimapPlayerDot.fillStyle(0xFFFFFF)
+    this.minimapPlayerDot.fillRect(px, py, 2, 2)
   }
 
   // ── Dialog (FFTA style: rounded cream box, portrait right, name tab) ───────
@@ -672,6 +790,7 @@ export default class HubScene extends Phaser.Scene {
     this.updateNPCPrompts()
     this.checkPortalOverlap()
     this.updateStats()
+    this.updateMinimap()
   }
 
   handleMovement() {
@@ -693,6 +812,8 @@ export default class HubScene extends Phaser.Scene {
   updateNPCPrompts() {
     const nearby = this.getNearbyNPC()
     if (nearby && !this.dialogState) {
+      const label = nearby.def.battle ? '[E] Duel' : '[E] Talk'
+      this.promptLabel.setText(label)
       this.promptLabel.setVisible(true)
       this.promptLabel.setPosition(
         nearby.sprite.x - this.promptLabel.width / 2,
