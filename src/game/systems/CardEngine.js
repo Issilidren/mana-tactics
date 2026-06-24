@@ -161,8 +161,13 @@ function parseSpellEffect(description) {
 function parseETBEffect(description) {
   if (!description) return null
   const desc = description.toLowerCase()
-  const m = desc.match(/when (?:~|this creature|this|it) enters(?: the battlefield)?[,\s]+(.+?)(?:\.|;|$)/)
-  return m ? parseSpellEffect(m[1].trim()) : null
+  // Match "when [card name / ~ / this / it] enters [the battlefield][,] [effect]"
+  const m = desc.match(/when (?:~|this|.+?) enters(?: the battlefield)?[,\s]+(.+?)(?:\.|;|$)/)
+  if (m) return parseSpellEffect(m[1].trim())
+  // Fallback: plain "enters the battlefield," pattern
+  const m2 = desc.match(/enters the battlefield[,:\s]+(.+?)(?:\.|;|$)/)
+  if (m2) return parseSpellEffect(m2[1].trim())
+  return null
 }
 
 // ── Activated ability parser ──────────────────────────────────────────────────

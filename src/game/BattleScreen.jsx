@@ -755,6 +755,7 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
   const [searchModal, setSearchModal] = useState(null) // { library, wishCards }
   const [instantWindow, setInstantWindow] = useState(false)
   const [pendingETB, setPendingETB] = useState(null) // { card, effect }
+  const [pendingAiActions, setPendingAiActions] = useState(null) // { actions, nextIdx }
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -886,10 +887,24 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
       const seen = new Set()
       const wishCards = []
       for (const entry of (playerDeck || [])) {
-        const card = entry.card || entry
-        if (card && !seen.has(card.id)) { seen.add(card.id); wishCards.push(card) }
+        const c = entry.card || entry
+        if (c && !seen.has(c.id)) { seen.add(c.id); wishCards.push(c) }
       }
       setSearchModal({ library: result.library, wishCards })
+      return
+    }
+
+    // Counter spell cast in response to a pending AI action → cancel that action
+    const isCounter = card.description?.toLowerCase().includes('counter target')
+    if (instantWindow && pendingAiActions !== null && isCounter) {
+      const { actions, nextIdx } = pendingAiActions
+      const pendingAction = actions[nextIdx]
+      engineRef.current._log(`Counter spell cancels AI's ${pendingAction?.type === 'castCreature' ? 'creature' : 'spell'}!`)
+      setPendingAiActions(null)
+      setInstantWindow(false)
+      syncState()
+      setAiThinking(true)
+      executeAiActions(actions, nextIdx + 1)
       return
     }
 
@@ -999,8 +1014,15 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
     setInstantWindow(false)
     setSelectedHandIdx(null)
     setSelectedBfIdx(null)
-    engineRef.current.startTurn('player')
-    syncState()
+    if (pendingAiActions !== null) {
+      const { actions, nextIdx } = pendingAiActions
+      setPendingAiActions(null)
+      setAiThinking(true)
+      executeAiActions(actions, nextIdx, true) // playerPassedPriority=true: skip instant check for this action
+    } else {
+      engineRef.current.startTurn('player')
+      syncState()
+    }
   }
 
   // ── AI turn runner ───────────────────────────────────────────────────────────
@@ -1023,7 +1045,7 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
     }, 800)
   }
 
-  function executeAiActions(actions, idx) {
+  function executeAiActions(actions, idx, playerPassedPriority = false) {
     if (!engineRef.current) return
 
     if (idx >= actions.length || engineRef.current.state.winner) {
@@ -1033,11 +1055,23 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
         syncState()
         setAiThinking(false)
         setInstantWindow(true)
+        // pendingAiActions is null here = end-of-turn window
       }, 600)
       return
     }
 
     const action = actions[idx]
+
+    // Before AI spell/creature: give player a respond window if they have instants
+    if (!playerPassedPriority &&
+        (action.type === 'castSpell' || action.type === 'castCreature') &&
+        engineRef.current.state.player.hand.some(c => c.type === 'instant')) {
+      setPendingAiActions({ actions, nextIdx: idx })
+      setAiThinking(false)
+      setInstantWindow(true)
+      syncState()
+      return
+    }
 
     setTimeout(() => {
       if (!engineRef.current) return
@@ -1205,6 +1239,8 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
               setPendingAttackers([])
               setSelectingAttackers(false)
               setAiThinking(false)
+              setInstantWindow(false)
+              setPendingAiActions(null)
               syncState()
             })
           }}
@@ -1477,13 +1513,20 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
 
             {instantWindow ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <div style={{ fontSize: '0.62rem', color: '#88CCFF', letterSpacing: 1 }}>
-                  INSTANT WINDOW — cast instants, then pass
+                <div style={{ fontSize: '0.62rem',
+                              color: pendingAiActions ? '#FFCC44' : '#88CCFF',
+                              letterSpacing: 1, maxWidth: 180 }}>
+                  {pendingAiActions
+                    ? `AI about to ${pendingAiActions.actions[pendingAiActions.nextIdx]?.type === 'castSpell' ? 'cast a spell' : 'play a creature'} — respond or PASS`
+                    : "Opponent's turn ended — cast instants or PASS"
+                  }
                 </div>
                 <button
                   className="btn-primary"
                   onClick={handlePassInstantWindow}
-                  style={{ fontSize: '0.75rem', padding: '4px 14px', background: '#1A4A90', borderColor: '#4488EE' }}
+                  style={{ fontSize: '0.75rem', padding: '4px 14px',
+                           background: pendingAiActions ? '#5A3000' : '#1A4A90',
+                           borderColor: pendingAiActions ? '#FFAA44' : '#4488EE' }}
                 >
                   PASS →
                 </button>
