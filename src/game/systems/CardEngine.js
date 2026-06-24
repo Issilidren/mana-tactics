@@ -251,7 +251,7 @@ export class CardEngine {
       else if (turn === 2)
         this._log('Kael: "Now spend that mana — select a creature and hit Play Creature."')
       else if (turn === 3)
-        this._log('Kael: "When you're ready — Attack, pick your creatures, Confirm. Go on."')
+        this._log(`Kael: "When you're ready — Attack, pick your creatures, Confirm. Go on."`)
       else if (turn === 4)
         this._log('Kael: "Spells target the player or a creature on the field. Try one."')
     }
