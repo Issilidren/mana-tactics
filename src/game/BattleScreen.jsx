@@ -594,6 +594,149 @@ function ResultOverlay({ winner, reward, npcName, onContinue, onRematch, onRetre
   )
 }
 
+// ── Search / Wish Modal ──────────────────────────────────────────────────────
+function SearchModal({ library, wishCards, onPickLibrary, onPickWish, onSkip }) {
+  const [tab, setTab] = useState('library')
+  const cards = tab === 'library' ? library : wishCards
+
+  const TAB_STYLE = (active) => ({
+    padding: '4px 14px',
+    fontFamily: "'Cinzel',serif",
+    fontSize: '0.7rem',
+    fontWeight: 700,
+    letterSpacing: '0.06em',
+    cursor: 'pointer',
+    background: active ? '#C8961E' : 'rgba(212,175,55,0.08)',
+    color: active ? '#0A0E1A' : '#D4AF37',
+    border: `1px solid ${active ? '#D4AF37' : 'rgba(212,175,55,0.3)'}`,
+    borderRadius: 3,
+  })
+
+  return (
+    <div style={{
+      position: 'absolute', inset: 0,
+      background: 'rgba(4,8,16,0.97)',
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      zIndex: 300, fontFamily: "'Courier New', monospace",
+    }}>
+      {/* Header */}
+      <div style={{
+        width: '100%', background: '#0A1828',
+        borderBottom: '2px solid #C8961E',
+        padding: '8px 16px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <span style={{ fontFamily: "'Cinzel',serif", fontSize: '1rem', color: '#D4AF37', fontWeight: 900, letterSpacing: '0.1em' }}>
+          ✦ CHOOSE A CARD ✦
+        </span>
+        <button onClick={onSkip} style={{
+          background: 'transparent', border: '1px solid rgba(212,175,55,0.3)',
+          color: '#7090B0', cursor: 'pointer', padding: '3px 10px',
+          fontFamily: "'Cinzel',serif", fontSize: '0.65rem',
+        }}>
+          Skip
+        </button>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: 8, padding: '10px 0 6px' }}>
+        <button style={TAB_STYLE(tab === 'library')} onClick={() => setTab('library')}>
+          Search Library ({library.length})
+        </button>
+        <button style={TAB_STYLE(tab === 'wish')} onClick={() => setTab('wish')}>
+          From Collection ({wishCards.length})
+        </button>
+      </div>
+
+      <div style={{ fontSize: '0.6rem', color: '#506880', marginBottom: 8 }}>
+        {tab === 'library'
+          ? 'Pick a card from your library — it goes to your hand and your library shuffles.'
+          : 'Wish for a card from your deck — it comes directly to your hand.'}
+      </div>
+
+      {/* Card list */}
+      <div style={{
+        flex: 1, overflowY: 'auto', width: '100%', maxWidth: 680,
+        padding: '0 16px 16px',
+        display: 'flex', flexDirection: 'column', gap: 5,
+      }}>
+        {cards.length === 0 && (
+          <div style={{ color: '#506880', fontSize: '0.75rem', textAlign: 'center', marginTop: 24 }}>
+            — No cards available —
+          </div>
+        )}
+        {cards.map((card, i) => {
+          const color = card.color || 'colorless'
+          const frame = CARD_FRAME[color] || CARD_FRAME.colorless
+          const isCreature = card.type === 'creature'
+          return (
+            <div
+              key={`${card.id}-${i}`}
+              onClick={() => tab === 'library' ? onPickLibrary(card.id) : onPickWish(card)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                background: `linear-gradient(90deg, ${frame.bg}22, transparent)`,
+                border: `1px solid ${frame.border}44`,
+                borderLeft: `3px solid ${frame.border}`,
+                borderRadius: 3,
+                padding: '6px 10px',
+                cursor: 'pointer',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = `linear-gradient(90deg, ${frame.bg}55, ${frame.bg}22)` }}
+              onMouseLeave={e => { e.currentTarget.style.background = `linear-gradient(90deg, ${frame.bg}22, transparent)` }}
+            >
+              {/* Color swatch */}
+              <div style={{ width: 8, height: 40, background: frame.header, borderRadius: 2, flexShrink: 0 }} />
+
+              {/* Card info */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: "'Cinzel',serif", fontSize: '0.72rem', fontWeight: 700, color: '#E8E0C8' }}>
+                  {card.name}
+                </div>
+                <div style={{ fontSize: '0.55rem', color: '#7090B0', textTransform: 'uppercase', letterSpacing: 1 }}>
+                  {card.type}{card.rarity ? ` · ${card.rarity}` : ''}
+                  {isCreature && card.power != null ? ` · ${card.power}/${card.toughness}` : ''}
+                </div>
+                {card.description && (
+                  <div style={{ fontSize: '0.5rem', color: '#A09880', fontStyle: 'italic', marginTop: 2 }}>
+                    {card.description.slice(0, 80)}{card.description.length > 80 ? '…' : ''}
+                  </div>
+                )}
+              </div>
+
+              {/* Mana cost badge */}
+              {card.type !== 'land' && (
+                <div style={{
+                  minWidth: 24, height: 24, borderRadius: '50%',
+                  background: frame.header, border: `1.5px solid ${frame.border}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '0.65rem', fontWeight: 'bold', color: frame.headerText, flexShrink: 0,
+                }}>
+                  {getManaCost(card)}
+                </div>
+              )}
+
+              {/* Pick button */}
+              <div style={{
+                padding: '4px 10px',
+                background: 'rgba(200,150,30,0.15)',
+                border: '1px solid rgba(212,175,55,0.4)',
+                borderRadius: 3,
+                color: '#D4AF37',
+                fontSize: '0.65rem',
+                fontFamily: "'Cinzel',serif",
+                flexShrink: 0,
+              }}>
+                Pick
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── Main BattleScreen component ───────────────────────────────────────────────
 export default function BattleScreen({ npcData, playerDeck, userProgress, onBattleEnd }) {
   const { npcName = 'Opponent', color = 'colorless', deckType = 'colorless', reward = 50 } = npcData || {}
@@ -609,6 +752,7 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
   const [aiThinking, setAiThinking] = useState(false)
   const [message, setMessage] = useState('')
   const [hoveredCard, setHoveredCard] = useState(null) // { card, rect }
+  const [searchModal, setSearchModal] = useState(null) // { library, wishCards }
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -724,6 +868,19 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
 
     setSelectedHandIdx(null)
     setSelectedBfIdx(null)
+
+    if (result.needsChoice === 'search') {
+      // Build wish cards: unique cards from the player's original deck
+      const seen = new Set()
+      const wishCards = []
+      for (const entry of (playerDeck || [])) {
+        const card = entry.card || entry
+        if (card && !seen.has(card.id)) { seen.add(card.id); wishCards.push(card) }
+      }
+      setSearchModal({ library: result.library, wishCards })
+      return
+    }
+
     syncState()
   }
 
@@ -964,6 +1121,25 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
       {/* Hover tooltip — rendered at fixed position above everything */}
       {hoveredCard && (
         <CardTooltip card={hoveredCard.card} rect={hoveredCard.rect} />
+      )}
+
+      {/* Search / wish modal */}
+      {searchModal && (
+        <SearchModal
+          library={searchModal.library}
+          wishCards={searchModal.wishCards}
+          onPickLibrary={(cardId) => {
+            engineRef.current.completeSearch('player', cardId)
+            setSearchModal(null)
+            syncState()
+          }}
+          onPickWish={(card) => {
+            engineRef.current.completeWish('player', card)
+            setSearchModal(null)
+            syncState()
+          }}
+          onSkip={() => { setSearchModal(null); syncState() }}
+        />
       )}
 
       {/* Result overlay */}
