@@ -693,13 +693,30 @@ export class CardEngine {
   }
 
   declareBlockers(blockerMap) {
-    this.state.blockers = blockerMap
-    const who = this._opponentName(this.state.activePlayer)
-    const opp = this._player(who)
+    const attackerWho = this.state.activePlayer
+    const defenderWho = this._opponentName(attackerWho)
+    const attackerPlayer = this._player(attackerWho)
+    const defenderPlayer = this._player(defenderWho)
+
+    // Validate each block assignment — enforce flying/reach rules at the engine level
+    const validatedMap = {}
     for (const [ai, bi] of Object.entries(blockerMap)) {
-      const blocker = opp.battlefield[bi]
-      if (blocker) this._log(`${who} blocks attacker[${ai}] with ${blocker.card.name}`)
+      const attackerSlot = attackerPlayer.battlefield[ai]
+      const blockerSlot  = defenderPlayer.battlefield[bi]
+      if (!attackerSlot || !blockerSlot) continue
+
+      // Flying attackers can only be blocked by flying or reach creatures
+      if (hasAbility(attackerSlot.card, 'flying')) {
+        const canBlock = hasAbility(blockerSlot.card, 'flying') || hasAbility(blockerSlot.card, 'reach')
+        if (!canBlock) {
+          this._log(`${blockerSlot.card.name} cannot block ${attackerSlot.card.name} (flying) — block ignored`)
+          continue
+        }
+      }
+      validatedMap[ai] = bi
+      this._log(`${defenderWho} blocks attacker[${ai}] with ${blockerSlot.card.name}`)
     }
+    this.state.blockers = validatedMap
     return { ok: true }
   }
 

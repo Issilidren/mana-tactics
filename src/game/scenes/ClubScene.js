@@ -349,22 +349,25 @@ class ClubScene extends Phaser.Scene {
   createNPCs() {
     const { archmage, members } = this.cfg
 
+    const addNPC = (def, tx, ty) => {
+      const sprite = this.physics.add.sprite(tx, ty, def.texture).setScale(0.65).setDepth(9)
+      sprite.body.setImmovable(true)
+      sprite.body.setSize(20, 22)
+      sprite.body.setOffset(2, 5)
+      this.physics.add.collider(this.player, sprite)
+      this.npcs.push({ def, sprite })
+    }
+
     // Archmage leader
     const ax = archmage.tileX * TILE + TILE / 2
     const ay = archmage.tileY * TILE + TILE / 2
-    this.npcs.push({
-      def: archmage,
-      sprite: this.add.sprite(ax, ay, archmage.texture).setScale(0.65).setDepth(9),
-    })
+    addNPC(archmage, ax, ay)
 
     // Club members
     for (const m of members) {
       const mx = m.tileX * TILE + TILE / 2
       const my = m.tileY * TILE + TILE / 2
-      this.npcs.push({
-        def: m,
-        sprite: this.add.sprite(mx, my, m.texture).setScale(0.65).setDepth(9),
-      })
+      addNPC(m, mx, my)
     }
   }
 
