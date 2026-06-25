@@ -10,20 +10,38 @@ export default class BootScene extends Phaser.Scene {
   }
 
   preload() {
-    // Tiles
+    // Tiles — base set
     this.load.image('tile-floor', 'assets/tiles/floor.png')
     this.load.image('tile-wall',  'assets/tiles/wall.png')
     this.load.image('tile-door',  'assets/tiles/door.png')
+    // Tiles — FFTA extended set (16 tiles)
+    this.load.image('tile-warm-stone',    'assets/tiles/01_warm_stone_floor.png')
+    this.load.image('tile-wood-plank',    'assets/tiles/02_wood_plank_floor.png')
+    this.load.image('tile-crimson-carpet','assets/tiles/03_crimson_carpet.png')
+    this.load.image('tile-rune-stone',    'assets/tiles/04_rune_stone_floor.png')
+    this.load.image('tile-banner-wall',   'assets/tiles/05_banner_wall.png')
+    this.load.image('tile-wall-top',      'assets/tiles/06_crenellated_wall.png')
+    this.load.image('tile-arched-door',   'assets/tiles/07_arched_door.png')
+    this.load.image('tile-open-arch',     'assets/tiles/08_open_archway.png')
+    this.load.image('tile-stairs',        'assets/tiles/09_staircase.png')
+    this.load.image('tile-magic-circle',  'assets/tiles/10_magic_circle.png')
+    this.load.image('tile-water-pool',    'assets/tiles/11_water_pool.png')
+    this.load.image('tile-cobblestone',   'assets/tiles/12_mossy_cobblestone.png')
+    this.load.image('tile-void',          'assets/tiles/13_void_border.png')
+    this.load.image('tile-gold-star',     'assets/tiles/14_gold_star_floor.png')
+    this.load.image('tile-carpet-trans',  'assets/tiles/15_carpet_stone_transition.png')
+    this.load.image('tile-skylight',      'assets/tiles/16_skylight_ceiling.png')
 
     // Background images
-    this.load.image('worldmap-bg',   'assets/worldmap-bg.png')
-    this.load.image('hub-bg',        'assets/hub-bg.png')
-    this.load.image('club-white-bg', 'assets/club-white-bg.png')
-    this.load.image('club-blue-bg',  'assets/club-blue-bg.png')
-    this.load.image('club-black-bg', 'assets/club-black-bg.png')
-    this.load.image('club-red-bg',   'assets/club-red-bg.png')
-    this.load.image('club-green-bg', 'assets/club-green-bg.png')
-    this.load.image('archives-bg',   'assets/archives-bg.png')
+    this.load.image('worldmap-bg',    'assets/worldmap-bg.png')
+    this.load.image('hub-bg',         'assets/hub-bg.png')
+    this.load.image('club-white-bg',  'assets/club-white-bg.png')
+    this.load.image('club-blue-bg',   'assets/club-blue-bg.png')
+    this.load.image('club-black-bg',  'assets/club-black-bg.png')
+    this.load.image('club-red-bg',    'assets/club-red-bg.png')
+    this.load.image('club-green-bg',  'assets/club-green-bg.png')
+    this.load.image('archives-bg',    'assets/archives-bg.png')
+    this.load.image('oracle-vault-bg','assets/oracle-vault-bg.png')
 
     // Character sprites
     this.load.image('player',        'assets/sprites/player.png')
