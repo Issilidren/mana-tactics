@@ -137,7 +137,7 @@ export default class ArchivesScene extends Phaser.Scene {
     const startX = (COLS - 3) * TILE + TILE / 2   // col 22 center
     const startY = 9 * TILE + TILE / 2             // row 9 center
     this.player = this.physics.add.sprite(startX, startY, 'player')
-    this.player.setDisplaySize(48, 72)
+    this.player.setDisplaySize(30, 48)
     this.player.setCollideWorldBounds(true)
     this.player.setDepth(10)
     this.player.body.setSize(12, 14)
@@ -152,7 +152,7 @@ export default class ArchivesScene extends Phaser.Scene {
     for (const def of NPC_DEFS) {
       const x = def.tileX * TILE + TILE / 2
       const y = def.tileY * TILE + TILE / 2
-      const sprite = this.physics.add.sprite(x, y, def.texture).setScale(0.65).setDepth(9)
+      const sprite = this.physics.add.sprite(x, y, def.texture).setDisplaySize(28, 44).setDepth(9)
       sprite.body.setImmovable(true)
       sprite.body.setSize(20, 22)
       sprite.body.setOffset(2, 5)

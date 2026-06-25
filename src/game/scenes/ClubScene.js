@@ -334,7 +334,7 @@ class ClubScene extends Phaser.Scene {
     const startX = 12 * TILE + TILE / 2
     const startY = 14 * TILE + TILE / 2
     this.player = this.physics.add.sprite(startX, startY, 'player')
-    this.player.setDisplaySize(48, 72)
+    this.player.setDisplaySize(30, 48)
     this.player.setCollideWorldBounds(true)
     this.player.setDepth(10)
     this.player.body.setSize(12, 14)
@@ -350,7 +350,7 @@ class ClubScene extends Phaser.Scene {
     const { archmage, members } = this.cfg
 
     const addNPC = (def, tx, ty) => {
-      const sprite = this.physics.add.sprite(tx, ty, def.texture).setDisplaySize(48, 72).setDepth(9)
+      const sprite = this.physics.add.sprite(tx, ty, def.texture).setDisplaySize(28, 44).setDepth(9)
       sprite.body.setImmovable(true)
       sprite.body.setSize(20, 22)
       sprite.body.setOffset(2, 5)
