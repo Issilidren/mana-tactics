@@ -502,7 +502,7 @@ export default class HubScene extends Phaser.Scene {
     const startY = Math.floor(ROWS / 2) * TILE + TILE / 2
 
     this.player = this.physics.add.sprite(startX, startY, 'player')
-    this.player.setScale(0.65)
+    this.player.setDisplaySize(48, 72)
     this.player.setCollideWorldBounds(true)
     this.player.setDepth(10)
     this.player.body.setSize(12, 14)

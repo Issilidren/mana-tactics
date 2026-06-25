@@ -44,6 +44,29 @@ const ART_OVERLAY = [
   'repeating-linear-gradient(90deg, transparent, transparent 3px, rgba(0,0,0,0.07) 3px, rgba(0,0,0,0.07) 4px)',
 ].join(', ')
 
+// Local illustrated card art — takes priority over gradient fallback
+const LOCAL_CARD_ART = {
+  'island':          'assets/card-art/island.png',
+  'mountain':        'assets/card-art/mountain.png',
+  'forest':          'assets/card-art/forest.png',
+  'swamp':           'assets/card-art/swamp.png',
+  'plains':          'assets/card-art/plains.png',
+  'brainstorm':      'assets/card-art/brainstorm.png',
+  'ponder':          'assets/card-art/ponder.png',
+  'dark ritual':     'assets/card-art/dark-ritual.png',
+  'viscera seer':    'assets/card-art/viscera-seer.png',
+  'gitaxian probe':  'assets/card-art/gitaxian-probe.png',
+  'vampiric tutor':  'assets/card-art/vampiric-tutor.png',
+  'reanimate':       'assets/card-art/reanimate.png',
+  'entomb':          'assets/card-art/entomb.png',
+  'village rites':   'assets/card-art/village-rites.png',
+  'consider':        'assets/card-art/consider.png',
+  'mystical tutor':  'assets/card-art/mystical-tutor.png',
+}
+function getCardArt(card) {
+  return LOCAL_CARD_ART[card?.name?.toLowerCase()] || null
+}
+
 // ── GBC Heart HP display ──────────────────────────────────────────────────────
 function LifeDots({ life, max = 10 }) {
   const hearts = Math.min(life, max)
@@ -166,15 +189,24 @@ function BattleCard({
         alignItems: 'center',
         justifyContent: 'center',
       }}>
+        {getCardArt(card) && (
+          <img
+            src={getCardArt(card)}
+            alt=""
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
+          />
+        )}
         <div style={{ position: 'absolute', inset: 0, background: ART_OVERLAY }} />
-        <span style={{
-          fontSize: size === 'hand' ? '1.3rem' : '1.5rem',
-          filter: 'drop-shadow(1px 1px 0px rgba(0,0,0,0.9))',
-          zIndex: 1,
-          lineHeight: 1,
-        }}>
-          {isCreature ? '⚔' : isLand ? '🏔' : '✨'}
-        </span>
+        {!getCardArt(card) && (
+          <span style={{
+            fontSize: size === 'hand' ? '1.3rem' : '1.5rem',
+            filter: 'drop-shadow(1px 1px 0px rgba(0,0,0,0.9))',
+            zIndex: 1,
+            lineHeight: 1,
+          }}>
+            {isCreature ? '⚔' : isLand ? '🏔' : '✨'}
+          </span>
+        )}
         {damage > 0 && (
           <div style={{
             position: 'absolute', top: 2, right: 2,
@@ -381,14 +413,23 @@ function CardTooltip({ card, rect }) {
         position: 'relative',
         overflow: 'hidden',
       }}>
+        {getCardArt(card) && (
+          <img
+            src={getCardArt(card)}
+            alt=""
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
+          />
+        )}
         <div style={{ position: 'absolute', inset: 0, background: ART_OVERLAY }} />
-        <span style={{
-          fontSize: '3rem',
-          filter: 'drop-shadow(2px 2px 0 rgba(0,0,0,0.9))',
-          zIndex: 1, lineHeight: 1,
-        }}>
-          {isCreature ? '⚔' : isLand ? '🏔' : '✨'}
-        </span>
+        {!getCardArt(card) && (
+          <span style={{
+            fontSize: '3rem',
+            filter: 'drop-shadow(2px 2px 0 rgba(0,0,0,0.9))',
+            zIndex: 1, lineHeight: 1,
+          }}>
+            {isCreature ? '⚔' : isLand ? '🏔' : '✨'}
+          </span>
+        )}
       </div>
 
       {/* Type bar */}

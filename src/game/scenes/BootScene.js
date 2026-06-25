@@ -53,6 +53,33 @@ export default class BootScene extends Phaser.Scene {
     this.load.image('npc-librarian', 'assets/sprites/npc-librarian.png')
     this.load.image('npc-merchant',  'assets/sprites/npc-merchant.png')
     this.load.image('npc-caretaker', 'assets/sprites/npc-caretaker.png')
+    this.load.image('npc-chronicler',    'assets/sprites/npc-chronicler.png')
+    this.load.image('npc-archivist-new', 'assets/sprites/npc-archivist.png')
+    this.load.image('npc-tactician',     'assets/sprites/npc-tactician.png')
+    this.load.image('npc-ironclad',      'assets/sprites/npc-ironclad.png')
+    this.load.image('npc-fire-student',  'assets/sprites/npc-fire-student.png')
+    this.load.image('npc-water-student', 'assets/sprites/npc-water-student.png')
+    this.load.image('npc-earth-student', 'assets/sprites/npc-earth-student.png')
+    this.load.image('npc-wind-student',  'assets/sprites/npc-wind-student.png')
+    this.load.image('npc-shadow-student','assets/sprites/npc-shadow-student.png')
+
+    // Card art illustrations
+    this.load.image('art-island',          'assets/card-art/island.png')
+    this.load.image('art-mountain',        'assets/card-art/mountain.png')
+    this.load.image('art-forest',          'assets/card-art/forest.png')
+    this.load.image('art-swamp',           'assets/card-art/swamp.png')
+    this.load.image('art-plains',          'assets/card-art/plains.png')
+    this.load.image('art-brainstorm',      'assets/card-art/brainstorm.png')
+    this.load.image('art-ponder',          'assets/card-art/ponder.png')
+    this.load.image('art-dark-ritual',     'assets/card-art/dark-ritual.png')
+    this.load.image('art-viscera-seer',    'assets/card-art/viscera-seer.png')
+    this.load.image('art-gitaxian-probe',  'assets/card-art/gitaxian-probe.png')
+    this.load.image('art-vampiric-tutor',  'assets/card-art/vampiric-tutor.png')
+    this.load.image('art-reanimate',       'assets/card-art/reanimate.png')
+    this.load.image('art-entomb',          'assets/card-art/entomb.png')
+    this.load.image('art-village-rites',   'assets/card-art/village-rites.png')
+    this.load.image('art-consider',        'assets/card-art/consider.png')
+    this.load.image('art-mystical-tutor',  'assets/card-art/mystical-tutor.png')
   }
 
   create() {
