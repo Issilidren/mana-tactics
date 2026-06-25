@@ -152,15 +152,36 @@ export default class HubScene extends Phaser.Scene {
   create() {
     this.transitioning = false
     const walkable = this.buildWalkableMap()
-    this.drawMap(walkable)           // renders FFTA tiles + wall physics bodies
-    // drawFurniture baked into pre-rendered background             // tables, bookshelves, carpet, plants + fountain
-    // drawPortalDoor baked into pre-rendered background            // south exit to World Map
+    this.drawMap(walkable)           // pre-rendered bg + invisible wall physics
+    // Furniture & portal visuals baked into pre-rendered background
+    // but we still need the invisible trigger zones:
+    this.setupTriggerZones()
     this.createPlayer()
     this.createNPCs()
     this.setupCamera()
     this.setupInput()
     this.createUI()
     this.startNPCBehaviors()
+  }
+
+  // ── Invisible trigger zones (over pre-rendered background) ──────────────────
+  setupTriggerZones() {
+    // Portal to World Map — bottom center (matches the gate in the background)
+    const doorCol = 12
+    const px = doorCol * TILE + TILE / 2   // 400
+    const py = 16 * TILE + TILE / 2        // 528
+    this.portalBounds = new Phaser.Geom.Rectangle(px - 40, py - 10, 80, 30)
+
+    // "WORLD MAP" label so players know to walk south
+    this.add.text(px, py + 24, 'WORLD MAP', {
+      fontSize: '10px', color: '#D4AF37',
+      fontFamily: 'monospace', fontStyle: 'bold',
+    }).setOrigin(0.5, 0).setDepth(3)
+
+    // Left passage to Archives — left wall, middle rows
+    const lpx = 0
+    const lpy = 8 * TILE
+    this.leftPassageBounds = new Phaser.Geom.Rectangle(lpx, lpy, TILE, 3 * TILE)
   }
 
   // ── Walkable grid ──────────────────────────────────────────────────────────
