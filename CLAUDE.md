@@ -10,6 +10,13 @@ MTG x Final Fantasy Tactics deck builder + Phaser RPG. Two layers:
 - `main` = stable snapshots only, merged from dev via PR
 - Remote: `github.com/Issilidren/mana-tactics`
 
+## npm / WSL Split — IMPORTANT
+Running `npm install` from Windows and WSL installs different native Rollup binaries — they conflict.
+- **Windows Command Prompt**: run `npm install` to get Windows binaries → enables `npm run dev` (Vite watcher)
+- **WSL**: run `npm install` to get Linux binaries → enables `npx vite build` and Claude Code tool use
+- After any WSL `npm install`, Kenny must re-run `npm install` from Windows cmd before `npm run dev` works again
+- This is a known npm bug with optional native dependencies — not a project issue
+
 ## Tech Stack
 | Layer | Tech |
 |---|---|
@@ -70,6 +77,29 @@ src/lib/cardUtils.js                — shared FRAME palette + artUrl() — impo
 - Style target: GBA/FFTA oblique 2.5D — visible wall faces, depth shading, 3/4-view sprites
 - Sprites are 24×32 RGBA; all face SW (lower-left) in 3/4 isometric view
 - **CRITICAL**: Do NOT use or copy assets from `C:\Users\Kenny\Downloads\CelestialShaman_v8_PATCHED\` — that is a completely separate project and is off limits
+
+## FFTA Extended Tileset (2026-06-25)
+16 new 64×64 tile PNGs in `public/assets/tiles/` — preloaded in BootScene with these Phaser keys:
+| Key | File |
+|---|---|
+| `tile-warm-stone` | `01_warm_stone_floor.png` |
+| `tile-wood-plank` | `02_wood_plank_floor.png` |
+| `tile-crimson-carpet` | `03_crimson_carpet.png` |
+| `tile-rune-stone` | `04_rune_stone_floor.png` |
+| `tile-banner-wall` | `05_banner_wall.png` |
+| `tile-wall-top` | `06_crenellated_wall.png` |
+| `tile-arched-door` | `07_arched_door.png` |
+| `tile-open-arch` | `08_open_archway.png` |
+| `tile-stairs` | `09_staircase.png` |
+| `tile-magic-circle` | `10_magic_circle.png` |
+| `tile-water-pool` | `11_water_pool.png` |
+| `tile-cobblestone` | `12_mossy_cobblestone.png` |
+| `tile-void` | `13_void_border.png` |
+| `tile-gold-star` | `14_gold_star_floor.png` |
+| `tile-carpet-trans` | `15_carpet_stone_transition.png` |
+| `tile-skylight` | `16_skylight_ceiling.png` |
+
+Oracle's Vault background: `public/assets/oracle-vault-bg.png` — preloaded as `oracle-vault-bg`
 
 ## Visual Style — 2.5D Oblique (2026-06-24)
 The game uses **oblique 2.5D** (not true isometric) so physics grid positions match screen positions exactly.
@@ -256,18 +286,34 @@ Scripts live at `C:\Users\Kenny\write_*.py`
 - `schema.sql` type CHECK only covered creature/spell/enchantment/artifact — expanded to include `instant`, `sorcery`, `land`; 5 basic land cards (Plains–Forest) added to `seed.sql` with UUIDs 16–20 (2026-06-25)
 - `aiDecks.js` starter deck had wrong card mix — corrected to 4× white_knight, llanowar_elves, giant_growth, goblin_guide (2026-06-25)
 - `generate_assets.py` had hardcoded WSL paths for SPRITES_DIR/TILES_DIR — replaced with portable `os.path.dirname(os.path.abspath(__file__))` relative paths (2026-06-25)
+- `declareBlockers()` was a pass-through stub — replaced with MTG-correct flying/reach enforcement: flying attackers can only be blocked by flying or reach creatures; illegal blocks logged and dropped (2026-06-25)
+- `ClubScene.createNPCs()` used plain `this.add.sprite` — upgraded to `this.physics.add.sprite` with `setImmovable(true)` and per-NPC player collider so NPCs act as solid obstacles (2026-06-25)
+
+## Postgame — The Legendary Alumni (The Triad)
+Unlocks after player collects all 5 Archmage Seals. Full spec in `docs/Mana_Tactics_Legendary_Alumni_Handoff.md`.
+- **Archon Tasklet** — Blue/White control (`deckType: 'triad-tasklet'`)
+- **Archon Gemini** — Green/Blue ramp (`deckType: 'triad-gemini'`)
+- **Archon Claude** — Red/White aggro (`deckType: 'triad-claude'`)
+- New scene: `SanctumScene.js` — hidden underground chamber beneath the Academy
+- New sprites needed: `npc-tasklet.png`, `npc-gemini.png`, `npc-claude.png`
+- Unlock flow: 5th seal → golden particle cutscene → "Invitation of the Triad" → hidden door in HubScene → SanctumScene
+- Lore breadcrumbs to scatter in NPC dialogs — see handoff doc for full script
+- Use `oracle-vault-bg.png` as placeholder background until SanctumScene BG is generated
 
 ## Pending Work (priority order)
 > ✅ All 7 bugs from the 2026-06-25 Final Audit Handoff are resolved (see Known Bugs Fixed above).
+> ✅ FFTA tileset (16 tiles) integrated and preloaded (2026-06-25).
 
 1. **Battle system polish** (highest priority — most gameplay-visible)
    - Card play animations (creature lands on field, spell cast flash)
    - Win/lose improvements: death state when HP hits 0, recovery mechanic (rest at hub to restore HP)
    - Better AI difficulty per club/region (academy NPCs easy, archmages hard)
    - More MTG abilities: vigilance, trample damage bleed-through, lifelink display
-2. **HP recovery mechanic** — player can rest at Hub to restore HP (costs gold or just a button); currently HP floors at 1 and never recovers
-3. **Additional academy rooms** — Hub is one room; passage left (upward) and bottom exit (World Map) exist. Future rooms: `gen_*.py` → PNG, new `*Scene.js` mirroring HubScene. Plug-and-play pattern.
-4. **Browser testing visual overhaul** — verify 2.5D backgrounds + 4-corner HUD + 3/4-view sprites look right in-game
+2. **HP recovery mechanic** — player can rest at Hub to restore HP; currently HP floors at 1 and never recovers
+3. **Victory screen** — overlay when `progress.seals.length >= 5 && !activeBattle` (Feature 1 from audit)
+4. **Legendary Alumni postgame** — SanctumScene.js + 3 new sprites + Triad AI decks (see section above)
+5. **Additional academy rooms** — plug-and-play pattern: `gen_*.py` → PNG, new `*Scene.js` mirroring HubScene
+6. **Browser testing visual overhaul** — verify 2.5D backgrounds + 4-corner HUD + 3/4-view sprites look right in-game
 
 ## MCPs Installed (this project)
 - `puppeteer` — screenshot the running app for visual feedback
