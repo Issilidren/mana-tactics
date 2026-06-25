@@ -898,7 +898,7 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
       if (card.type !== 'instant' && !isFlash) return showMessage('You can only cast instants or Flash creatures right now — or press PASS')
     } else {
       if (gameState.activePlayer !== 'player') return
-      if (gameState.phase !== 'main') return
+      if ((gameState.phase !== 'main' && gameState.phase !== 'main2')) return
     }
 
     if (selectedHandIdx === i) {
@@ -1015,7 +1015,7 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
   function handlePlayerBfClick(i) {
     if (!gameState || aiThinking) return
 
-    if (gameState.phase === 'main' && selectedHandIdx !== null) {
+    if ((gameState.phase === 'main' || gameState.phase === 'main2') && selectedHandIdx !== null) {
       const card = gameState.player.hand[selectedHandIdx]
       if (card && (card.type === 'instant' || card.type === 'sorcery' || card.type === 'spell')) {
         handleCastSpell('own_creature', i)
@@ -1034,7 +1034,7 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
     }
 
     // Tap to activate ability: main phase, player's turn, no spell selected, not selecting attackers
-    if (gameState.phase === 'main' && gameState.activePlayer === 'player' && selectedHandIdx === null && !selectingAttackers) {
+    if ((gameState.phase === 'main' || gameState.phase === 'main2') && gameState.activePlayer === 'player' && selectedHandIdx === null && !selectingAttackers) {
       const result = engineRef.current.activateAbility('player', i)
       if (result.ok) {
         syncState()
@@ -1093,7 +1093,7 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
       return
     }
 
-    const isMain = gameState.phase === 'main' && gameState.activePlayer === 'player'
+    const isMain = (gameState.phase === 'main' || gameState.phase === 'main2') && gameState.activePlayer === 'player'
     if (!isMain && !instantWindow) return
     if (selectedHandIdx === null) return
 
@@ -1103,7 +1103,7 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
   }
 
   function handleStartAttack() {
-    if (!gameState || gameState.phase !== 'main') return
+    if (!gameState || (gameState.phase !== 'main' && gameState.phase !== 'main2')) return
     if (gameState.activePlayer !== 'player') return
     setSelectingAttackers(true)
     setPendingAttackers([])

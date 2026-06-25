@@ -110,8 +110,7 @@ export default class ArchivesScene extends Phaser.Scene {
   drawMap(walkable) {
     this.wallGroup = this.physics.add.staticGroup()
 
-    const bg = this.add.image(0, 0, 'archives-bg').setOrigin(0, 0).setDepth(0)
-    bg.setDisplaySize(COLS * TILE, ROWS * TILE)
+    const bg = this.add.image(400, 300, 'archives-bg').setDisplaySize(800, 600).setDepth(0)
 
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
@@ -297,7 +296,7 @@ export default class ArchivesScene extends Phaser.Scene {
 
     const portrait = this.add.sprite(
       BOX_X + PORT_W / 2 + 8, BOX_Y + BOX_H / 2, npc.def.texture
-    ).setScale(3).setDepth(52)
+    ).setDisplaySize(56, 110).setDepth(52)
 
     const nameText = this.add.text(BOX_X + 16, BOX_Y - 14, npc.def.name, {
       fontSize: '12px', color: '#FFFFFF', fontFamily: '"Arial", sans-serif',

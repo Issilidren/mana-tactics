@@ -242,7 +242,7 @@ class ClubScene extends Phaser.Scene {
     this.npcs          = []
 
     // PNG background (baked-in floor, furniture, carpet, bookshelves)
-    this.add.image(0, 0, this.cfg.bgKey).setOrigin(0, 0).setDepth(0)
+    this.add.image(400, 300, this.cfg.bgKey).setDisplaySize(800, 600).setDepth(0)
 
     const walkable = MAP.map(row => Array.from(row).map(ch => ch !== 'W'))
     this.drawFloor(walkable).setAlpha(0)   // invisible — physics walls still active
@@ -537,7 +537,7 @@ class ClubScene extends Phaser.Scene {
       BOX_X + PORT_W / 2 + 8,
       BOX_Y + BOX_H / 2,
       npc.def.texture,
-    ).setScale(3).setDepth(52)
+    ).setDisplaySize(56, 110).setDepth(52)
 
     const nameText = this.add.text(BOX_X + 16, BOX_Y - 14, npc.def.name, {
       fontSize: '12px', color: '#FFFFFF',

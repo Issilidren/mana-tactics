@@ -153,8 +153,8 @@ export default class HubScene extends Phaser.Scene {
     this.transitioning = false
     const walkable = this.buildWalkableMap()
     this.drawMap(walkable)           // renders FFTA tiles + wall physics bodies
-    this.drawFurniture()             // tables, bookshelves, carpet, plants + fountain
-    this.drawPortalDoor()            // south exit to World Map
+    // drawFurniture baked into pre-rendered background             // tables, bookshelves, carpet, plants + fountain
+    // drawPortalDoor baked into pre-rendered background            // south exit to World Map
     this.createPlayer()
     this.createNPCs()
     this.setupCamera()
@@ -180,41 +180,23 @@ export default class HubScene extends Phaser.Scene {
   // ── Floor and wall tiles ───────────────────────────────────────────────────
 
   drawMap(walkable) {
-    this.wallGroup = this.physics.add.staticGroup()
+    // Pre-rendered isometric background
+    this.add.image(400, 300, 'hub-bg').setDisplaySize(800, 600).setDepth(0)
 
-    // Tile-by-tile rendering using FFTA tile images (64x64 displayed at 32x32)
+    this.wallGroup = this.physics.add.staticGroup()
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
+        const ch = MAP[r]?.[c] || 'W'
         const x = c * TILE + TILE / 2
         const y = r * TILE + TILE / 2
-        const isWall = !walkable[r][c]
-
-        if (isWall) {
-          const tileKey = r === 0 ? 'tile-banner-wall' : 'tile-wall-top'
-          this.add.image(x, y, tileKey).setDisplaySize(TILE, TILE).setDepth(0)
-          const wall = this.wallGroup.create(x, y, 'tile-wall')
-          wall.setAlpha(0)
-          wall.setOrigin(0.5, 0.5)
+        if (ch === 'W') {
+          if (r === ROWS - 1 && c >= 11 && c <= 13) continue
+          const wall = this.wallGroup.create(x, y, null)
           wall.body.setSize(TILE, TILE)
-          wall.refreshBody()
-        } else {
-          let tileKey = 'tile-warm-stone'
-          if (c === 12 && (r === 8 || r === 9)) tileKey = 'tile-magic-circle'
-          else if (c >= 9 && c <= 15 && r >= 6 && r <= 11) tileKey = 'tile-crimson-carpet'
-          else if (c <= 2 || c >= 22) tileKey = 'tile-rune-stone'
-          else if (r <= 2) tileKey = 'tile-wood-plank'
-          else if (r >= 15 && c >= 10 && c <= 14) tileKey = 'tile-gold-star'
-          this.add.image(x, y, tileKey).setDisplaySize(TILE, TILE).setDepth(0)
+          wall.setVisible(false)
         }
       }
     }
-
-    // Portal trigger zone — col 12 center=400, row 16 center=528
-    this.portalBounds = new Phaser.Geom.Rectangle(360, 518, 80, 30)
-    // Card shop interaction zone — cols 19-22, rows 5-6 front edge
-    this.shopBounds = new Phaser.Geom.Rectangle(600, 185, 112, 45)
-    // Left passage to Archives (rows 8-10, left wall)
-    this.leftPassageBounds = new Phaser.Geom.Rectangle(0, 262, 50, 80)
   }
 
   // ── Fountain (FFTA-style centrepiece) ─────────────────────────────────────
@@ -361,7 +343,7 @@ export default class HubScene extends Phaser.Scene {
     this.drawPlant(g, 16, 16)  // bottom area right
 
     // ── 6. Centrepiece fountain ─────────────────────────────────────────────
-    this.drawFountain()
+    // drawFountain baked into pre-rendered background
   }
 
   drawTable(g, col, row) {
@@ -529,6 +511,7 @@ export default class HubScene extends Phaser.Scene {
 
   createNPCs() {
     this.npcs = []
+    this.npcGroup = this.physics.add.group()
     for (const def of NPC_DEFS) {
       const x = def.tileX * TILE + TILE / 2
       const y = def.tileY * TILE + TILE / 2

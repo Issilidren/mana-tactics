@@ -778,100 +778,114 @@ export class CardEngine {
           }
         }
 
+        // --- MTG-compliant combat math ---
         const attackPow = attackerSlot.card.power
-        const blockPow  = blockerSlot.card.power
+        const atkHasDeathtouch = hasAbility(attackerSlot.card, 'deathtouch')
+        const atkHasTrample = hasAbility(attackerSlot.card, 'trample')
+        const atkHasLifelink = hasAbility(attackerSlot.card, 'lifelink')
+        const atkHasFirstStrike = hasAbility(attackerSlot.card, 'first strike')
 
-        const attackerFS  = hasAbility(attackerSlot.card, 'first_strike') || hasAbility(attackerSlot.card, 'first strike')
-        const attackerDS  = hasAbility(attackerSlot.card, 'double_strike') || hasAbility(attackerSlot.card, 'double strike')
-        const blockerFS   = hasAbility(blockerSlot.card,  'first_strike') || hasAbility(blockerSlot.card,  'first strike')
-        const blockerDS   = hasAbility(blockerSlot.card,  'double_strike') || hasAbility(blockerSlot.card, 'double strike')
-        const attackerDT  = hasAbility(attackerSlot.card, 'deathtouch')
-        const blockerDT   = hasAbility(blockerSlot.card,  'deathtouch')
+        const defPow = blockerSlot.card.power
+        const defToughness = blockerSlot.card.toughness
+        const defHasDeathtouch = hasAbility(blockerSlot.card, 'deathtouch')
+        const defHasFirstStrike = hasAbility(blockerSlot.card, 'first strike')
 
-        const trample     = hasAbility(attackerSlot.card, 'trample')
+        let attackerDied = false
+        let blockerDied = false
+        let totalAtkDmgDealt = 0
 
-        // Damage dealt = actual power (deathtouch does NOT inflate damage)
-        let dmgToBlocker  = attackPow
-        let dmgToAttacker = blockPow
-
-        // Double strike
-        if (attackerDS) dmgToBlocker *= 2
-        if (blockerDS)  dmgToAttacker *= 2
-
-        // Deathtouch: any amount of damage is lethal
-        const blockerLethal = attackerDT ? 1 : blockerSlot.card.toughness
-        const attackerLethal = blockerDT ? 1 : attackerSlot.card.toughness
-
-        // First strike sequencing
-        const attackerHasStrike = attackerFS || attackerDS
-        const blockerHasStrike  = blockerFS  || blockerDS
-
-        if (attackerHasStrike && !blockerHasStrike) {
-          if (dmgToBlocker >= blockerLethal) {
-            dmgToAttacker = 0
-            this._log(`${attackerSlot.card.name} first-strikes ${blockerSlot.card.name} before it can hit back`)
+        // --- First Strike step ---
+        if (atkHasFirstStrike && !defHasFirstStrike) {
+          // Attacker hits first
+          const lethalToBlocker = atkHasDeathtouch ? 1 : defToughness
+          if (attackPow >= lethalToBlocker) {
+            blockerDied = true
+            this._log(`${blockerSlot.card.name} destroyed by first strike from ${attackerSlot.card.name}`)
+            const dmgToBlocker = atkHasDeathtouch ? 1 : Math.min(attackPow, defToughness)
+            const excess = atkHasTrample ? Math.max(0, attackPow - (atkHasDeathtouch ? 1 : defToughness)) : 0
+            totalAtkDmgDealt = dmgToBlocker + excess
+            if (excess > 0) {
+              defenderPlayer.life -= excess
+              this._log(`${attackerSlot.card.name} tramples for ${excess} to ${defenderWho}`)
+            }
+          } else {
+            // Blocker survives first strike, hits back
+            totalAtkDmgDealt = attackPow
+            if (defHasDeathtouch || defPow >= attackerSlot.card.toughness) {
+              attackerDied = true
+              this._log(`${attackerSlot.card.name} destroyed by ${blockerSlot.card.name} after first strike`)
+            }
           }
-        } else if (blockerHasStrike && !attackerHasStrike) {
-          if (dmgToAttacker >= attackerLethal) {
-            dmgToBlocker = 0
-            this._log(`${blockerSlot.card.name} first-strikes ${attackerSlot.card.name} before it can hit back`)
+        } else if (defHasFirstStrike && !atkHasFirstStrike) {
+          // Defender hits first
+          if (defHasDeathtouch || defPow >= attackerSlot.card.toughness) {
+            attackerDied = true
+            this._log(`${attackerSlot.card.name} destroyed by first strike from ${blockerSlot.card.name} — no damage dealt`)
+          } else {
+            // Attacker survives, deals damage
+            const lethalToBlocker = atkHasDeathtouch ? 1 : defToughness
+            if (attackPow >= lethalToBlocker) {
+              blockerDied = true
+            }
+            const dmgToBlocker = atkHasDeathtouch ? 1 : Math.min(attackPow, defToughness)
+            const excess = atkHasTrample ? Math.max(0, attackPow - (atkHasDeathtouch ? 1 : defToughness)) : 0
+            totalAtkDmgDealt = dmgToBlocker + excess
+            if (excess > 0) {
+              defenderPlayer.life -= excess
+              this._log(`${attackerSlot.card.name} tramples for ${excess} to ${defenderWho}`)
+            }
           }
-        }
-
-        // Apply damage
-        attackerSlot.damage += dmgToAttacker
-        blockerSlot.damage  += dmgToBlocker
-
-        // Deathtouch: if any damage dealt, force it to be lethal
-        if (attackerDT && dmgToBlocker > 0) blockerSlot.damage = Math.max(blockerSlot.damage, blockerSlot.card.toughness)
-        if (blockerDT  && dmgToAttacker > 0) attackerSlot.damage = Math.max(attackerSlot.damage, attackerSlot.card.toughness)
-
-        this._log(`${attackerSlot.card.name} (${attackPow}/${attackerSlot.card.toughness}) vs ${blockerSlot.card.name} (${blockPow}/${blockerSlot.card.toughness})`)
-
-        // Trample: with deathtouch only 1 dmg needed to kill blocker
-        let totalDmgDealtByAttacker = dmgToBlocker
-        if (trample) {
-          const lethalNeeded = attackerDT ? 1 : blockerSlot.card.toughness
-          const excess = Math.max(0, attackPow - lethalNeeded)
+        } else {
+          // Simultaneous damage (both have or neither has first strike)
+          const lethalToBlocker = atkHasDeathtouch ? 1 : defToughness
+          if (attackPow >= lethalToBlocker) {
+            blockerDied = true
+          }
+          if (defHasDeathtouch || defPow >= attackerSlot.card.toughness) {
+            attackerDied = true
+          }
+          const dmgToBlocker = atkHasDeathtouch ? 1 : Math.min(attackPow, defToughness)
+          const excess = atkHasTrample ? Math.max(0, attackPow - (atkHasDeathtouch ? 1 : defToughness)) : 0
+          totalAtkDmgDealt = dmgToBlocker + excess
           if (excess > 0) {
             defenderPlayer.life -= excess
-            totalDmgDealtByAttacker += excess
-            this._log(`${attackerSlot.card.name} tramples for ${excess} to ${defenderWho} (life: ${defenderPlayer.life})`)
+            this._log(`${attackerSlot.card.name} tramples for ${excess} to ${defenderWho}`)
           }
         }
 
-        // Lifelink: heals once based on TOTAL damage dealt
-        if (hasAbility(attackerSlot.card, 'lifelink') && totalDmgDealtByAttacker > 0) {
-          attackerPlayer.life += totalDmgDealtByAttacker
-          lifelinkHeals.push({ who: attackerWho, amount: totalDmgDealtByAttacker })
-          this._log(`${attackerSlot.card.name} lifelink — ${attackerWho} gains ${totalDmgDealtByAttacker} life (life: ${attackerPlayer.life})`)
+        // Apply deaths
+        if (blockerDied) {
+          defenderPlayer.graveyard = [...defenderPlayer.graveyard, blockerSlot.card]
+          blockerSlot.card = null
         }
-        if (hasAbility(blockerSlot.card, 'lifelink') && dmgToAttacker > 0) {
-          defenderPlayer.life += dmgToAttacker
-          lifelinkHeals.push({ who: defenderWho, amount: dmgToAttacker })
-          this._log(`${blockerSlot.card.name} lifelink — ${defenderWho} gains ${dmgToAttacker} life (life: ${defenderPlayer.life})`)
+        if (attackerDied) {
+          attackerPlayer.graveyard = [...attackerPlayer.graveyard, attackerSlot.card]
+          attackerSlot.card = null
+        }
+
+        // Lifelink — heals for TOTAL damage dealt (to blocker + trample), once
+        if (atkHasLifelink && totalAtkDmgDealt > 0 && !attackerDied) {
+          attackerPlayer.life += totalAtkDmgDealt
+          lifelinkHeals.push({ who: attackerWho, amount: totalAtkDmgDealt })
+          this._log(`${attackerSlot?.card?.name || 'Attacker'} lifelink — ${attackerWho} gains ${totalAtkDmgDealt} life`)
         }
 
       } else {
-        // Unblocked — deal damage directly to defending player
+        // Unblocked attacker — direct damage to opponent
         const dmg = attackerSlot.card.power
         defenderPlayer.life -= dmg
-
+        this._log(`${attackerSlot.card.name} attacks unblocked — deals ${dmg} to ${defenderWho} (life: ${defenderPlayer.life})`)
         if (hasAbility(attackerSlot.card, 'lifelink')) {
           attackerPlayer.life += dmg
           lifelinkHeals.push({ who: attackerWho, amount: dmg })
           this._log(`${attackerSlot.card.name} lifelink — ${attackerWho} gains ${dmg} life`)
         }
-        this._log(`${attackerSlot.card.name} unblocked — deals ${dmg} to ${defenderWho} (life: ${defenderPlayer.life})`)
       }
-    }
-
-    this._destroyDamaged(attackerWho)
-    this._destroyDamaged(defenderWho)
+    }  // end for-each attacker
 
     this.state.attackers = []
     this.state.blockers  = {}
-    this.state.phase = 'main2'         // Main Phase 2: play more cards after combat
+    this.state.phase = 'main2'  // Main Phase 2 — can play more cards after combat
 
     this.checkWinner()
     return { ok: true, lifelinkHeals }
