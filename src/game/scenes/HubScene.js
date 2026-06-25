@@ -152,8 +152,9 @@ export default class HubScene extends Phaser.Scene {
   create() {
     this.transitioning = false
     const walkable = this.buildWalkableMap()
-    this.drawMap(walkable)           // renders hub-bg.png + wall physics bodies
-    // drawFurniture() and drawPortalDoor() removed — all furniture/portal art is baked into hub-bg.png
+    this.drawMap(walkable)           // renders FFTA tiles + wall physics bodies
+    this.drawFurniture()             // tables, bookshelves, carpet, plants + fountain
+    this.drawPortalDoor()            // south exit to World Map
     this.createPlayer()
     this.createNPCs()
     this.setupCamera()
@@ -181,21 +182,29 @@ export default class HubScene extends Phaser.Scene {
   drawMap(walkable) {
     this.wallGroup = this.physics.add.staticGroup()
 
-    // Rich pre-generated background image (replaces individual tile sprites)
-    const bg = this.add.image(0, 0, 'hub-bg').setOrigin(0, 0).setDepth(0)
-    bg.setDisplaySize(COLS * TILE, ROWS * TILE)
-
-    // Invisible wall colliders (physics bodies only, no visible sprites)
+    // Tile-by-tile rendering using FFTA tile images (64x64 displayed at 32x32)
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
-        if (!walkable[r][c]) {
-          const x = c * TILE + TILE / 2
-          const y = r * TILE + TILE / 2
-          // Use tile-wall texture but hide it; hub-bg image provides the visual
+        const x = c * TILE + TILE / 2
+        const y = r * TILE + TILE / 2
+        const isWall = !walkable[r][c]
+
+        if (isWall) {
+          const tileKey = r === 0 ? 'tile-banner-wall' : 'tile-wall-top'
+          this.add.image(x, y, tileKey).setDisplaySize(TILE, TILE).setDepth(0)
           const wall = this.wallGroup.create(x, y, 'tile-wall')
           wall.setAlpha(0)
           wall.setOrigin(0.5, 0.5)
+          wall.body.setSize(TILE, TILE)
           wall.refreshBody()
+        } else {
+          let tileKey = 'tile-warm-stone'
+          if (c === 12 && (r === 8 || r === 9)) tileKey = 'tile-magic-circle'
+          else if (c >= 9 && c <= 15 && r >= 6 && r <= 11) tileKey = 'tile-crimson-carpet'
+          else if (c <= 2 || c >= 22) tileKey = 'tile-rune-stone'
+          else if (r <= 2) tileKey = 'tile-wood-plank'
+          else if (r >= 15 && c >= 10 && c <= 14) tileKey = 'tile-gold-star'
+          this.add.image(x, y, tileKey).setDisplaySize(TILE, TILE).setDepth(0)
         }
       }
     }
@@ -502,11 +511,14 @@ export default class HubScene extends Phaser.Scene {
     const startY = Math.floor(ROWS / 2) * TILE + TILE / 2
 
     this.player = this.physics.add.sprite(startX, startY, 'player')
-    this.player.setDisplaySize(48, 72)
+    this.player.setDisplaySize(30, 48)           // GBA-scale: ~1 tile wide
     this.player.setCollideWorldBounds(true)
     this.player.setDepth(10)
-    this.player.body.setSize(12, 14)
-    this.player.body.setOffset(2, 10)
+    this.player.body.setSize(20, 20)
+    this.player.body.setOffset(
+      (this.player.width - 20) / 2,
+      this.player.height - 24
+    )
     this._bumpCooldown = 0
     this.physics.add.collider(this.player, this.wallGroup, () => {
       SoundEngine.bump()
@@ -520,7 +532,17 @@ export default class HubScene extends Phaser.Scene {
     for (const def of NPC_DEFS) {
       const x = def.tileX * TILE + TILE / 2
       const y = def.tileY * TILE + TILE / 2
-      const sprite = this.add.sprite(x, y, def.texture).setScale(0.65).setDepth(9)
+      const sprite = this.physics.add.sprite(x, y, def.texture)
+      sprite.setDisplaySize(28, 44)
+      sprite.setDepth(9)
+      sprite.setImmovable(true)
+      sprite.body.moves = false
+      sprite.body.setSize(20, 20)
+      sprite.body.setOffset(
+        (sprite.width - 20) / 2,
+        sprite.height - 24
+      )
+      this.physics.add.collider(this.player, sprite)
       this.npcs.push({ def, sprite })
     }
   }
@@ -772,12 +794,13 @@ export default class HubScene extends Phaser.Scene {
     bg.lineStyle(1, 0x9A8060, 0.7)
     bg.strokeRoundedRect(BOX_X + 8, BOX_Y + 8, PORT_W, BOX_H - 16, 6)
 
-    // Portrait sprite — 3× scale on LEFT
+    // Portrait sprite — fixed display size regardless of source texture
     const portrait = this.add.sprite(
       BOX_X + PORT_W / 2 + 8,
       BOX_Y + BOX_H / 2,
       npc.def.texture
-    ).setScale(3).setDepth(52)
+    ).setDepth(52)
+    portrait.setDisplaySize(56, 110)
 
     // Name text on the tab (white bold)
     const nameText = this.add.text(BOX_X + 16, BOX_Y - 14, npc.def.name, {
