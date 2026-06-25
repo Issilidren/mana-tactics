@@ -191,4 +191,5 @@ src/game/
 
 ## 📜 License
 
-All rights reserved © 2025 Kenny Abadia Castellano
+All rights reserved © 2026 Kenny Abadia Castellano  :i do not own mtg or any of its things,all rules and card concepts taken from public card data and reimagined by myself, Claude Ai(Coding) , Google Gemini (Research), Tasklet(Art/Graphic Design)
+(b^-^)b 
