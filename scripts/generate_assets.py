@@ -9,8 +9,9 @@ Run: python3 scripts/generate_assets.py
 from PIL import Image
 import os
 
-SPRITES_DIR = '/mnt/c/Users/Kenny/mana-tactics/public/assets/sprites'
-TILES_DIR   = '/mnt/c/Users/Kenny/mana-tactics/public/assets/tiles'
+BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SPRITES_DIR = os.path.join(BASE, 'public', 'assets', 'sprites')
+TILES_DIR   = os.path.join(BASE, 'public', 'assets', 'tiles')
 os.makedirs(SPRITES_DIR, exist_ok=True)
 os.makedirs(TILES_DIR, exist_ok=True)
 

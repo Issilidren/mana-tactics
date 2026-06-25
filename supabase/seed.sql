@@ -135,6 +135,48 @@ VALUES
     '{"green": 1}',
     NULL, NULL, 'common',
     'Target creature gets +3/+3 until end of turn'
+  ),
+
+  -- BASIC LANDS
+  (
+    '00000001-0000-0000-0000-000000000016',
+    'Plains',
+    'land', 'white',
+    NULL,
+    NULL, NULL, 'common',
+    'Tap: Add W'
+  ),
+  (
+    '00000001-0000-0000-0000-000000000017',
+    'Island',
+    'land', 'blue',
+    NULL,
+    NULL, NULL, 'common',
+    'Tap: Add U'
+  ),
+  (
+    '00000001-0000-0000-0000-000000000018',
+    'Swamp',
+    'land', 'black',
+    NULL,
+    NULL, NULL, 'common',
+    'Tap: Add B'
+  ),
+  (
+    '00000001-0000-0000-0000-000000000019',
+    'Mountain',
+    'land', 'red',
+    NULL,
+    NULL, NULL, 'common',
+    'Tap: Add R'
+  ),
+  (
+    '00000001-0000-0000-0000-000000000020',
+    'Forest',
+    'land', 'green',
+    NULL,
+    NULL, NULL, 'common',
+    'Tap: Add G'
   )
 
 ON CONFLICT (id) DO NOTHING;

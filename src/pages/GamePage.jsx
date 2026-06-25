@@ -107,7 +107,13 @@ export default function GamePage() {
     } catch (_) {}
   }
 
-  function handleBattleStart(npcData) { setActiveBattle(npcData) }
+  function handleBattleStart(npcData) {
+    if (playerCards.length === 0) {
+      alert('You need a deck first! Visit the Deck Builder from the main menu.')
+      return
+    }
+    setActiveBattle(npcData)
+  }
 
   function handleBattleEnd({ winner, reward, hpDamage = 0 }) {
     const color = activeBattle?.color

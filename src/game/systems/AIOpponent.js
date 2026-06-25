@@ -61,7 +61,7 @@ export class AIOpponent {
             if (dmgAmount >= targetTough || player.life <= 3) {
               actions.push({
                 type: 'castSpell',
-                handIndex: i,
+                cardId: card.id,
                 targetType: dmgAmount >= targetTough ? 'creature' : 'player',
                 targetIndex: biggestThreatIdx,
               })
@@ -71,7 +71,7 @@ export class AIOpponent {
           } else if (isDestroy) {
             actions.push({
               type: 'castSpell',
-              handIndex: i,
+              cardId: card.id,
               targetType: 'creature',
               targetIndex: biggestThreatIdx,
             })
@@ -94,10 +94,10 @@ export class AIOpponent {
       for (const { card, i } of dmgSpells) {
         const cost = getManaCost(card)
         if (manaLeft >= cost) {
-          // Don't double-cast if we already queued a spell at handIndex i
-          const alreadyQueued = actions.some(a => a.handIndex === i)
+          // Don't double-cast if we already queued a spell with this cardId
+          const alreadyQueued = actions.some(a => a.cardId === card.id)
           if (!alreadyQueued) {
-            actions.push({ type: 'castSpell', handIndex: i, targetType: 'player', targetIndex: -1 })
+            actions.push({ type: 'castSpell', cardId: card.id, targetType: 'player', targetIndex: -1 })
             manaLeft -= cost
           }
         }
@@ -113,9 +113,9 @@ export class AIOpponent {
     for (const { card, i } of creaturesInHand) {
       const cost = getManaCost(card)
       if (manaLeft >= cost) {
-        const alreadyQueued = actions.some(a => a.type === 'castCreature' && a.handIndex === i)
+        const alreadyQueued = actions.some(a => a.type === 'castCreature' && a.cardId === card.id)
         if (!alreadyQueued) {
-          actions.push({ type: 'castCreature', handIndex: i })
+          actions.push({ type: 'castCreature', cardId: card.id })
           manaLeft -= cost
         }
         if (manaLeft === 0) break
@@ -134,9 +134,9 @@ export class AIOpponent {
       for (const { card, i } of drawSpells) {
         const cost = getManaCost(card)
         if (manaLeft >= cost) {
-          const alreadyQueued = actions.some(a => a.handIndex === i)
+          const alreadyQueued = actions.some(a => a.cardId === card.id)
           if (!alreadyQueued) {
-            actions.push({ type: 'castSpell', handIndex: i, targetType: 'player', targetIndex: -1 })
+            actions.push({ type: 'castSpell', cardId: card.id, targetType: 'player', targetIndex: -1 })
             manaLeft -= cost
           }
         }

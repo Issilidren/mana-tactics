@@ -215,11 +215,10 @@ export const AI_DECKS = {
   starter: {
     color: 'colorless',
     cards: [
-      qty('white_knight', 3),    // 2/2 first strike
-      qty('llanowar_elves', 3),  // 1/1 — demonstrates small creatures + mana
-      qty('goblin_guide', 2),    // 2/2 haste — demonstrates haste
-      qty('giant_growth', 2),    // +3/+3 spell — demonstrates pump spells
-      qty('lightning_bolt', 2),  // 3 damage — demonstrates direct damage
+      qty('white_knight', 4),
+      qty('llanowar_elves', 4),
+      qty('giant_growth', 4),
+      qty('goblin_guide', 4),
     ],
   },
 

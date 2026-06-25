@@ -11,7 +11,7 @@
 CREATE TABLE IF NOT EXISTS public.cards (
   id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   name        text        NOT NULL,
-  type        text        NOT NULL CHECK (type IN ('creature', 'spell', 'enchantment', 'artifact')),
+  type        text        NOT NULL CHECK (type IN ('creature', 'spell', 'instant', 'sorcery', 'enchantment', 'artifact', 'land')),
   color       text        NOT NULL CHECK (color IN ('white', 'blue', 'black', 'red', 'green', 'colorless')),
   mana_cost   jsonb,
   power       int,

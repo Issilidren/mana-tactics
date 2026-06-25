@@ -21,6 +21,7 @@ MTG x Final Fantasy Tactics deck builder + Phaser RPG. Two layers:
 
 ## Supabase
 - URL + anon key are in `.env` (gitignored — never commit)
+- `.env.example` exists at project root with placeholder values — safe to commit
 - Tables: `users`, `cards` (320 Scryfall cards, read-only), `decks`, `deck_cards`, `player_profiles`, `shop_listings`, `purchases`
 - RLS: users can only see/edit their own decks, profiles, and purchases
 - `deck_cards.quantity` constraint: `>= 1` (no upper limit — basic lands are unlimited)
@@ -249,8 +250,16 @@ Scripts live at `C:\Users\Kenny\write_*.py`
 - ETB regex only matched `this/~/it enters` — missed real Scryfall card names like "When Thassa's Oracle enters"; broadened to `.+?` wildcard
 - Instant window opened AFTER all AI actions — player couldn't counter; fixed with `pendingAiActions` mid-chain pause
 - `SoundEngine` used throughout BattleScreen without import → `ReferenceError` crash on battle start; fixed by creating `SoundEngine.js` and adding named import
+- AI hand index desync — `AIOpponent.js` actions now store `cardId: card.id` instead of `handIndex: i`; `BattleScreen.jsx` resolves live index via `findHandIndex(hand, cardId)` at execution time with a -1 skip guard (2026-06-25)
+- `starterPicked` fired on every panel click creating duplicate Supabase decks — moved emit out of `pointerdown` into `confirm()` with `{ color: deck.color }` payload (2026-06-25)
+- Empty deck could enter battle with no creatures/spells — `handleBattleStart` now guards `playerCards.length === 0` with alert + early return (2026-06-25)
+- `schema.sql` type CHECK only covered creature/spell/enchantment/artifact — expanded to include `instant`, `sorcery`, `land`; 5 basic land cards (Plains–Forest) added to `seed.sql` with UUIDs 16–20 (2026-06-25)
+- `aiDecks.js` starter deck had wrong card mix — corrected to 4× white_knight, llanowar_elves, giant_growth, goblin_guide (2026-06-25)
+- `generate_assets.py` had hardcoded WSL paths for SPRITES_DIR/TILES_DIR — replaced with portable `os.path.dirname(os.path.abspath(__file__))` relative paths (2026-06-25)
 
 ## Pending Work (priority order)
+> ✅ All 7 bugs from the 2026-06-25 Final Audit Handoff are resolved (see Known Bugs Fixed above).
+
 1. **Battle system polish** (highest priority — most gameplay-visible)
    - Card play animations (creature lands on field, spell cast flash)
    - Win/lose improvements: death state when HP hits 0, recovery mechanic (rest at hub to restore HP)

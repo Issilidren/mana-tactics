@@ -1151,6 +1151,10 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
     }, 800)
   }
 
+  function findHandIndex(hand, cardId) {
+    return hand.findIndex(c => c.id === cardId)
+  }
+
   function executeAiActions(actions, idx, playerPassedPriority = false) {
     if (!engineRef.current) return
 
@@ -1185,9 +1189,13 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
 
       try {
         if (action.type === 'castCreature') {
-          engine.castCreature('ai', action.handIndex)
+          const handIdx = findHandIndex(engine.state.ai.hand, action.cardId)
+          if (handIdx === -1) { executeAiActions(actions, idx + 1); return }
+          engine.castCreature('ai', handIdx)
         } else if (action.type === 'castSpell') {
-          engine.castSpell('ai', action.handIndex, action.targetIndex, action.targetType)
+          const handIdx = findHandIndex(engine.state.ai.hand, action.cardId)
+          if (handIdx === -1) { executeAiActions(actions, idx + 1); return }
+          engine.castSpell('ai', handIdx, action.targetIndex, action.targetType)
         } else if (action.type === 'attack') {
           engine.declareAttackers(action.attackerIndices)
           // Pause for player to declare blockers
