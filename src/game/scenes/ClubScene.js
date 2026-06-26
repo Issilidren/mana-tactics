@@ -58,11 +58,11 @@ const CONFIGS = {
     members: [
       { texture: 'npc-tactician', tileX: 4,  tileY: 6,  name: 'Paladin Lyra',
         dialog: ['Flying angels are the pride of Solara. Have you faced one yet?'] },
-      { texture: 'npc-tactician', tileX: 20, tileY: 6,  name: 'Cleric Cael',
+      { texture: 'npc-water-student', tileX: 20, tileY: 6,  name: 'Cleric Cael',
         dialog: ['Lifelink means every attack also heals you. Pure white strategy.'] },
-      { texture: 'npc-tactician', tileX: 4,  tileY: 10, name: 'Knight Varis',
+      { texture: 'npc-ironclad', tileX: 4,  tileY: 10, name: 'Knight Varis',
         dialog: ['First strike is powerful. Hit them before they can hit back!'] },
-      { texture: 'npc-tactician', tileX: 20, tileY: 10, name: 'Warden Sire',
+      { texture: 'npc-archivist', tileX: 20, tileY: 10, name: 'Warden Sire',
         dialog: ['Vigilance lets us attack AND defend. No rest for white mages.'] },
       { texture: 'npc-green', tileX: 12, tileY: 12, name: 'Visitor Thane',
         dialog: ['I came from the Thornveil Woods to study white magic. Fascinating protection spells...'] },
@@ -94,13 +94,13 @@ const CONFIGS = {
     members: [
       { texture: 'npc-chronicler', tileX: 4,  tileY: 6,  name: 'Scholar Wavren',
         dialog: ['Card advantage wins games. The more you draw, the more options you have.'] },
-      { texture: 'npc-chronicler', tileX: 20, tileY: 6,  name: 'Scholar Tide',
+      { texture: 'npc-water-student', tileX: 20, tileY: 6,  name: 'Scholar Tide',
         dialog: ['Flying creatures cross the isles where no others can follow.'] },
-      { texture: 'npc-chronicler', tileX: 3,  tileY: 10, name: 'Archivist Brin',
+      { texture: 'npc-archivist', tileX: 3,  tileY: 10, name: 'Archivist Brin',
         dialog: ['These tomes hold every counter-spell ever devised. Quite the collection.'] },
-      { texture: 'npc-chronicler', tileX: 21, tileY: 10, name: 'Mage Frost',
+      { texture: 'npc-wind-student', tileX: 21, tileY: 10, name: 'Mage Frost',
         dialog: ['The Archmage once countered seven spells in a single turn. Seven!'] },
-      { texture: 'npc-chronicler', tileX: 8,  tileY: 13, name: 'Apprentice Rill',
+      { texture: 'npc-tactician', tileX: 8,  tileY: 13, name: 'Apprentice Rill',
         dialog: ['I am still learning. But blue magic rewards patience above all else.'] },
       { texture: 'npc-white', tileX: 16, tileY: 13, name: 'Visitor Zel',
         dialog: ['I came to study their card draw. White mages never draw quite enough...'] },
@@ -132,11 +132,11 @@ const CONFIGS = {
     members: [
       { texture: 'npc-shadow-student', tileX: 4,  tileY: 7,  name: 'Shade Morven',
         dialog: ['Every creature dies eventually. We just... accelerate the process.'] },
-      { texture: 'npc-shadow-student', tileX: 20, tileY: 7,  name: 'Shade Nyxe',
+      { texture: 'npc-chronicler', tileX: 20, tileY: 7,  name: 'Shade Nyxe',
         dialog: ['Power comes at a price. We are always willing to pay it.'] },
-      { texture: 'npc-shadow-student', tileX: 3,  tileY: 12, name: 'Shade Corvin',
+      { texture: 'npc-ironclad', tileX: 3,  tileY: 12, name: 'Shade Corvin',
         dialog: ['The strongest spells require sacrifice. Is that so different from anything else?'] },
-      { texture: 'npc-shadow-student', tileX: 21, tileY: 12, name: 'Shade Vex',
+      { texture: 'npc-archivist', tileX: 21, tileY: 12, name: 'Shade Vex',
         dialog: ['Deathtouch. Any creature we touch dies. Think about that.'] },
     ],
   },
@@ -166,15 +166,15 @@ const CONFIGS = {
     members: [
       { texture: 'npc-fire-student', tileX: 5,  tileY: 6,  name: 'Knight Blazer',
         dialog: ['ATTACK! ALWAYS ATTACK! Defense is for cowards!'] },
-      { texture: 'npc-fire-student', tileX: 19, tileY: 6,  name: 'Knight Cinder',
+      { texture: 'npc-ironclad', tileX: 19, tileY: 6,  name: 'Knight Cinder',
         dialog: ['Lightning Bolt can win games before they even start. Watch!'] },
-      { texture: 'npc-fire-student', tileX: 8,  tileY: 9,  name: 'Fighter Sear',
+      { texture: 'npc-tactician', tileX: 8,  tileY: 9,  name: 'Fighter Sear',
         dialog: ['Speed beats everything. By the time they react, we have already won!'] },
-      { texture: 'npc-fire-student', tileX: 16, tileY: 9,  name: 'Fighter Torch',
+      { texture: 'npc-earth-student', tileX: 16, tileY: 9,  name: 'Fighter Torch',
         dialog: ['Haste creatures! Play them on your turn, swing immediately!'] },
       { texture: 'npc-fire-student', tileX: 5,  tileY: 13, name: 'Warrior Fenn',
         dialog: ['The Archmage burned through a 20-health opponent in TWO turns. Two!'] },
-      { texture: 'npc-fire-student', tileX: 19, tileY: 13, name: 'Warrior Ash',
+      { texture: 'npc-shadow-student', tileX: 19, tileY: 13, name: 'Warrior Ash',
         dialog: ['Direct damage to the face. Ignore their creatures. Go for the win!'] },
     ],
   },
@@ -206,9 +206,9 @@ const CONFIGS = {
         dialog: ['Size matters in the woods. My 8/8 trampler proves it every time.'] },
       { texture: 'npc-wind-student',  tileX: 21, tileY: 6,  name: 'Ranger Moss',
         dialog: ['More lands means more mana means bigger creatures. Simple forest math.'] },
-      { texture: 'npc-earth-student', tileX: 3,  tileY: 10, name: 'Druid Bark',
+      { texture: 'npc-chronicler', tileX: 3,  tileY: 10, name: 'Druid Bark',
         dialog: ['Reach lets our creatures swat those pesky flyers right out of the sky.'] },
-      { texture: 'npc-wind-student',  tileX: 21, tileY: 10, name: 'Druid Fern',
+      { texture: 'npc-water-student',  tileX: 21, tileY: 10, name: 'Druid Fern',
         dialog: ['The ancient forests grant strength beyond any other guild. Feel it?'] },
       { texture: 'npc-earth-student', tileX: 7,  tileY: 13, name: 'Scout Twig',
         dialog: ['I patrol the border between the woods and the World Map portal.'] },
@@ -292,42 +292,16 @@ class ClubScene extends Phaser.Scene {
   // ── Portal door (exit to World Map) ────────────────────────────────────────
 
   drawPortalDoor() {
+    // No procedural portal art — the pre-rendered background already has the exit door.
+    // Just create the invisible trigger zone + a subtle label.
     const px = 12 * TILE + TILE / 2
-    const py = 16 * TILE + TILE / 2
-    const g = this.add.graphics().setDepth(2)
+    const py = 17 * TILE   // bottom of map, right at the gap in the wall
 
-    // Stone pillars
-    for (const ox of [-58, 44]) {
-      g.fillStyle(0x485838)
-      g.fillRect(px + ox, py - 40, 14, 56)
-      g.lineStyle(2, 0x101010, 1)
-      g.strokeRect(px + ox, py - 40, 14, 56)
-    }
-    // Arch body
-    g.fillStyle(0x304828)
-    g.fillRect(px - 48, py - 40, 96, 56)
-    g.fillStyle(0x0A1828)
-    g.fillRect(px - 40, py - 32, 80, 48)
-    // Shimmer bands
-    g.fillStyle(0x1A4080, 0.4)
-    g.fillRect(px - 36, py - 28, 72, 8)
-    g.fillRect(px - 36, py - 14, 72, 8)
-    g.fillRect(px - 36, py + 0,  72, 8)
-    // Arch top cap
-    g.fillStyle(0x304828)
-    g.fillRect(px - 48, py - 58, 96, 24)
-    g.fillStyle(0x0A1828)
-    g.fillRect(px - 40, py - 54, 80, 20)
-    // Gold borders
-    g.lineStyle(3, 0xD4AF37, 1)
-    g.strokeRect(px - 48, py - 40, 96, 56)
-    g.strokeRect(px - 48, py - 58, 96, 24)
+    this.add.text(px, py + 6, '▼ EXIT', {
+      fontSize: '9px', color: '#D4AF37', fontFamily: 'monospace', fontStyle: 'bold',
+    }).setOrigin(0.5, 0).setDepth(3).setAlpha(0.7)
 
-    this.add.text(px, py + 24, 'WORLD MAP', {
-      fontSize: '10px', color: '#D4AF37', fontFamily: 'monospace', fontStyle: 'bold',
-    }).setOrigin(0.5, 0).setDepth(3)
-
-    this.portalBounds = new Phaser.Geom.Rectangle(px - 40, py - 8, 80, 32)
+    this.portalBounds = new Phaser.Geom.Rectangle(px - 48, py - 12, 96, 32)
   }
 
   // ── Player (spawns near bottom, as if they just came through the portal) ───
@@ -491,9 +465,11 @@ class ClubScene extends Phaser.Scene {
     const gold  = this.registry.get('gold')  ?? 0
     const seals = this.registry.get('seals') ?? []
     const hp    = this.registry.get('hp')    ?? 10
-    this.statsText?.setText(
-      `HP: ${hp}   Gold: ${gold}   Seals: ${'★'.repeat(seals.length)}${'☆'.repeat(5 - seals.length)}`
-    )
+    const hpFull  = Math.min(hp, 5)
+    const hpEmpty = Math.max(0, 5 - hpFull)
+    const hearts  = '❤'.repeat(hpFull) + '♡'.repeat(hpEmpty)
+    const sealStr = '★'.repeat(seals.length) + '☆'.repeat(5 - seals.length)
+    this.statsText?.setText(`${hearts}  ◆ ${gold}  ${sealStr}`)
   }
 
   // ── FFTA-style dialog box ──────────────────────────────────────────────────
