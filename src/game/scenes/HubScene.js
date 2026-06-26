@@ -10,22 +10,22 @@ const ROWS = 18
 // prettier-ignore
 const MAP = [
   'WWWWWWWWWWWWWWWWWWWWWWWWW', // 0  top wall
-  'WFFFFFFFFFFFFFFFFFFFFFFFFW', // 1
-  'WFFFFFFFFFFFFFFFFFFFFFFFFW', // 2
-  'WFFFFFFFFFFFFFFFFFFFFFFFFW', // 3
-  'WFFFFFFFFFFFFFFFFFFFFFFFFW', // 4
-  'WFFFFFFFFFFFFFFFFFFFFFFFFW', // 5
-  'WFFFFFFFFFFFFFFFFFFFFFFFFW', // 6
-  'WFFFFFFFFFFFFFFFFFFFFFFFFW', // 7
-  'WFFFFFFFFFFFFFFFFFFFFFFFFW', // 8
-  'WFFFFFFFFFFFFFFFFFFFFFFFFW', // 9
-  'WFFFFFFFFFFFFFFFFFFFFFFFFW', // 10
-  'WFFFFFFFFFFFFFFFFFFFFFFFFW', // 11
-  'WFFFFFFFFFFFFFFFFFFFFFFFFW', // 12
-  'WFFFFFFFFFFFFFFFFFFFFFFFFW', // 13
-  'WFFFFFFFFFFFFFFFFFFFFFFFFW', // 14
-  'WFFFFFFFFFFFFFFFFFFFFFFFFW', // 15
-  'WFFFFFFFFFFFFFFFFFFFFFFFFW', // 16
+  'WFFFFFFFFFFFFFFFFFFFFFFFW', // 1
+  'WFFFFFFFFFFFFFFFFFFFFFFFW', // 2
+  'WFFFFFFFFFFFFFFFFFFFFFFFW', // 3
+  'WFFFFWFFFFFFFFFFFFFWFFFFFW', // 4  study tables
+  'WFFFFFFFFFFFFFFFFFFFFFFFW', // 5
+  'WFFFFFFFFFFFFFFFFFFFFFFFW', // 6
+  'WFFFFFFFFFFWWWWFFFFFFFFFW', // 7  fountain outer — col 10 open for Caretaker
+  'WFFFFFFFFFWWWWWFFFFFFFFFW', // 8  fountain basin
+  'WFFFFFFFFFWWWWWFFFFFFFFFW', // 9  fountain center
+  'WFFFFFFFFFWWWWWFFFFFFFFFW', // 10 fountain basin
+  'WFFFFFFFFFFWWWWFFFFFFFFFW', // 11 fountain base
+  'WFFFFFFFFFFFFFFFFFFFFFFFW', // 12
+  'WFFFFWFFFFFFFFFFFFFWFFFFFW', // 13 study tables
+  'WFFFFFFFFFFFFFFFFFFFFFFFW', // 14
+  'WFFFFFFFFFFFFFFFFFFFFFFFW', // 15
+  'WFFFFFFFFFFFFFFFFFFFFFFFW', // 16
   'WWWWWWWWWWWFFFWWWWWWWWWWW', // 17 bottom wall — gap at cols 11-13
 ]
 
@@ -70,7 +70,7 @@ const NPC_DEFS = [
   {
     key: 'practice-duelist',
     texture: 'npc-blue',
-    tileX: 12, tileY: 9,
+    tileX: 8, tileY: 9,
     tabColor: 0x1A4A90,
     name: 'Duelist Kael',
     dialog: [
@@ -157,8 +157,8 @@ export default class HubScene extends Phaser.Scene {
     this.transitioning = false
     const walkable = this.buildWalkableMap()
     this.drawMap(walkable)           // pre-rendered bg + invisible wall physics
-    // Furniture & portal visuals baked into pre-rendered background
-    // but we still need the invisible trigger zones:
+    this.drawFurniture()             // tables, bookshelves, plants as real objects
+    this.drawFountain()              // centerpiece fountain with crystal + glow
     this.setupTriggerZones()
     this.createPlayer()
     this.dirIndicator = createDirectionIndicator(this, this.player)
@@ -378,8 +378,116 @@ export default class HubScene extends Phaser.Scene {
     this.drawPlant(g, 8, 16)   // bottom area left
     this.drawPlant(g, 16, 16)  // bottom area right
 
-    // ── 6. Centrepiece fountain ─────────────────────────────────────────────
-    // drawFountain baked into pre-rendered background
+  }
+
+  drawFountain() {
+    const cx = 12 * TILE + TILE / 2   // center of map
+    const cy = 9 * TILE + TILE / 2
+
+    const g = this.add.graphics().setDepth(2)
+
+    // ── Outer basin — dark stone ring ────────────────────────────────────
+    g.fillStyle(0x3A3A4A)
+    g.fillEllipse(cx, cy + 4, 140, 100)    // stone base (slightly wider than tall for isometric feel)
+    g.lineStyle(3, 0x50506A, 1)
+    g.strokeEllipse(cx, cy + 4, 140, 100)
+
+    // ── Water surface — deep blue pool ───────────────────────────────────
+    g.fillStyle(0x1A3A6A, 0.85)
+    g.fillEllipse(cx, cy + 2, 120, 84)
+    // Water ripple rings
+    g.lineStyle(1, 0x4080C0, 0.3)
+    g.strokeEllipse(cx, cy + 2, 90, 60)
+    g.strokeEllipse(cx, cy + 2, 60, 40)
+
+    // ── Inner tier — raised stone pedestal ───────────────────────────────
+    g.fillStyle(0x4A4A5C)
+    g.fillEllipse(cx, cy - 2, 56, 40)
+    g.lineStyle(2, 0x60607A, 1)
+    g.strokeEllipse(cx, cy - 2, 56, 40)
+
+    // ── Crystal pedestal — dark base ─────────────────────────────────────
+    g.fillStyle(0x2A2A3A)
+    g.fillEllipse(cx, cy - 4, 24, 16)
+
+    // ── Crystal — tall blue-green gem ────────────────────────────────────
+    // Left facet (darker)
+    g.fillStyle(0x2090A0)
+    g.beginPath()
+    g.moveTo(cx, cy - 36)       // top point
+    g.lineTo(cx - 12, cy - 6)   // bottom-left
+    g.lineTo(cx, cy + 2)        // bottom center
+    g.closePath()
+    g.fillPath()
+
+    // Right facet (brighter)
+    g.fillStyle(0x40D0E0)
+    g.beginPath()
+    g.moveTo(cx, cy - 36)       // top point
+    g.lineTo(cx + 12, cy - 6)   // bottom-right
+    g.lineTo(cx, cy + 2)        // bottom center
+    g.closePath()
+    g.fillPath()
+
+    // Crystal highlight edge
+    g.lineStyle(1, 0x80F0FF, 0.6)
+    g.lineBetween(cx, cy - 36, cx - 12, cy - 6)
+    g.lineBetween(cx, cy - 36, cx + 12, cy - 6)
+    g.lineStyle(1, 0x60C0D0, 0.4)
+    g.lineBetween(cx - 12, cy - 6, cx, cy + 2)
+    g.lineBetween(cx + 12, cy - 6, cx, cy + 2)
+
+    // ── Crystal glow aura ────────────────────────────────────────────────
+    g.fillStyle(0x40C0D0, 0.08)
+    g.fillCircle(cx, cy - 16, 52)
+    g.fillStyle(0x40C0D0, 0.12)
+    g.fillCircle(cx, cy - 16, 32)
+
+    // ── Water shimmer highlights ─────────────────────────────────────────
+    const shimmerPositions = [
+      [-28, 12], [22, -8], [35, 18], [-18, 28], [-38, -4],
+      [10, 22], [-10, -16], [32, -14], [-30, 22], [0, 30],
+    ]
+    for (const [dx, dy] of shimmerPositions) {
+      g.fillStyle(0xFFFFFF, 0.15 + Math.random() * 0.1)
+      g.fillCircle(cx + dx, cy + dy, 1.5 + Math.random() * 1.5)
+    }
+
+    // ── Animated sparkles rising from crystal ────────────────────────────
+    for (let i = 0; i < 6; i++) {
+      const angle = (i / 6) * Math.PI * 2
+      const r = 20 + Math.random() * 20
+      const sx = cx + Math.cos(angle) * r
+      const sy = cy + Math.sin(angle) * r * 0.6 - 10  // flatten for isometric
+      const spark = this.add.text(sx, sy, '✦', {
+        fontSize: '8px', color: '#80E0F0',
+      }).setOrigin(0.5).setDepth(3).setAlpha(0)
+
+      this.tweens.add({
+        targets: spark,
+        alpha: { from: 0, to: 0.7 },
+        y: sy - 12,
+        duration: 1800 + i * 250,
+        yoyo: true,
+        repeat: -1,
+        delay: i * 350,
+      })
+    }
+
+    // ── Slow crystal pulse glow ──────────────────────────────────────────
+    const pulse = this.add.graphics().setDepth(2).setAlpha(0.3)
+    pulse.fillStyle(0x40D0E0, 0.2)
+    pulse.fillCircle(cx, cy - 16, 20)
+    this.tweens.add({
+      targets: pulse,
+      alpha: { from: 0.15, to: 0.5 },
+      scaleX: { from: 0.9, to: 1.2 },
+      scaleY: { from: 0.9, to: 1.2 },
+      duration: 2000,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    })
   }
 
   drawTable(g, col, row) {

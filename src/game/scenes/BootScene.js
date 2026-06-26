@@ -87,7 +87,7 @@ export default class BootScene extends Phaser.Scene {
   }
 
   create() {
-    const returning = localStorage.getItem('mt_starter')
-    this.scene.start(returning ? 'Hub' : 'Title')
+    // Always show Title — every Final Fantasy boots to its title screen
+    this.scene.start('Title')
   }
 }
