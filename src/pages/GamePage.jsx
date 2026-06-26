@@ -127,7 +127,12 @@ export default function GamePage() {
       const newSeals = progress.seals.includes(color)
         ? progress.seals
         : [...progress.seals, color].filter(Boolean)
-      next = { gold: newGold, hp: progress.hp, seals: newSeals }
+      // Heal on victory: +2 HP (capped at 10), or full restore for Triad wins
+      const isTriad = activeBattle?.deckType?.startsWith('triad-')
+      const healedHp = isTriad
+        ? 10                                          // Triad victory = full restore
+        : Math.min(10, progress.hp + 2)               // Normal win = +2 HP
+      next = { gold: newGold, hp: healedHp, seals: newSeals }
       if (newSeals.length >= 5 && !progress.seals.includes(color)) setGameComplete(true)
     } else {
       const newHp = Math.max(0, progress.hp - hpDamage)
@@ -292,8 +297,14 @@ export default function GamePage() {
             textAlign: 'center', maxWidth: 440, lineHeight: 1.8,
           }}>
             You have mastered all five schools of magic.<br />
-            White, Blue, Black, Red, and Green — the Crystal Nexus bows to your will.<br />
-            <span style={{ color: '#C8A840', fontSize: '0.85rem' }}>The Academy remains open. Your legend continues.</span>
+            White, Blue, Black, Red, and Green — the Crystal Nexus bows to your will.<br /><br />
+            <span style={{ color: '#D4AF37', fontSize: '0.95rem', fontWeight: 'bold' }}>
+              ✦ The Oracle Sanctum has opened ✦
+            </span><br />
+            <span style={{ color: '#C8A840', fontSize: '0.85rem' }}>
+              Three legendary alumni await in the sealed chamber above the Hub.<br />
+              They wish to honor you with a match.
+            </span>
           </div>
           <div style={{ display: 'flex', gap: 16, marginTop: 8 }}>
             <button

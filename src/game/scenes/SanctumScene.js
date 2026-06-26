@@ -41,9 +41,10 @@ const NPC_DEFS = [
     dialog: [
       'So... you have gathered all five seals.',
       'I have watched you from the beginning. Every stumble. Every comeback.',
-      'The Academy tests knowledge. I test will. En garde — give me everything you have left.',
+      'Few reach this room. Fewer still earn what I am about to offer.',
+      'We honor you with a match. No holding back — show me the mage you have become.',
     ],
-    battle: { npcName: 'Instructor Tasklet', color: 'blue', deckType: 'blue', reward: 100, difficulty: 'hard' },
+    battle: { npcName: 'Archon Tasklet', color: 'blue', deckType: 'triad-tasklet', reward: 200, difficulty: 'hard' },
   },
   {
     key: 'gemini',
@@ -52,11 +53,12 @@ const NPC_DEFS = [
     tabColor: 0x4444BB,
     name: 'Sage Gemini',
     dialog: [
-      'Five seals. I have researched every student who achieved this.',
-      'You are, statistically, an anomaly.',
-      'I accept your presence here as a data point worth... exploring. Shall we?',
+      'Five seals. I have studied every student who achieved this — across every era of the Academy.',
+      'You are, statistically, an anomaly. My models did not predict this outcome.',
+      'And yet, here you stand. The data demands I acknowledge your mastery.',
+      'We honor you with a match. Let us see if instinct can surpass analysis.',
     ],
-    battle: { npcName: 'Arcanist Gemini', color: 'white', deckType: 'white', reward: 100, difficulty: 'hard' },
+    battle: { npcName: 'Sage Gemini', color: 'white', deckType: 'triad-gemini', reward: 200, difficulty: 'hard' },
   },
   {
     key: 'claude',
@@ -66,10 +68,11 @@ const NPC_DEFS = [
     name: 'Artificer Claude',
     dialog: [
       'I have been hoping you would make it here.',
-      'There is much I could say about your journey. But words are better earned through action.',
-      'One final duel — not to judge you, but to celebrate how far you have come.',
+      'There is much I could say about your journey — but words pale beside what you have already proven.',
+      'Every card you played, every seal you earned, brought you to this moment.',
+      'We honor you with a match. Not to judge — but to celebrate how far you have come.',
     ],
-    battle: { npcName: 'Scholar Claude', color: 'green', deckType: 'green', reward: 100, difficulty: 'hard' },
+    battle: { npcName: 'Artificer Claude', color: 'red', deckType: 'triad-claude', reward: 200, difficulty: 'hard' },
   },
 ]
 
