@@ -62,6 +62,10 @@ export default class BootScene extends Phaser.Scene {
     this.load.image('npc-earth-student', 'assets/sprites/npc-earth-student.png')
     this.load.image('npc-wind-student',  'assets/sprites/npc-wind-student.png')
     this.load.image('npc-shadow-student','assets/sprites/npc-shadow-student.png')
+    // Oracle Sanctum secret champions — drop artwork PNGs here when ready
+    this.load.image('npc-tasklet', 'assets/sprites/npc-tasklet.png')
+    this.load.image('npc-gemini',  'assets/sprites/npc-gemini.png')
+    this.load.image('npc-claude',  'assets/sprites/npc-claude.png')
 
     // Card art illustrations
     this.load.image('art-island',          'assets/card-art/island.png')
@@ -83,6 +87,7 @@ export default class BootScene extends Phaser.Scene {
   }
 
   create() {
-    this.scene.start('Title')
+    const returning = localStorage.getItem('mt_starter')
+    this.scene.start(returning ? 'Hub' : 'Title')
   }
 }

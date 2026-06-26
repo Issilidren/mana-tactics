@@ -147,6 +147,8 @@ export default class HubScene extends Phaser.Scene {
     this.minimapGfx = null
     this.minimapPlayerDot = null
     this.leftPassageBounds = null
+    this.sanctumBounds = null
+    this._sanctumHintShown = false
   }
 
   create() {
@@ -182,6 +184,16 @@ export default class HubScene extends Phaser.Scene {
     const lpx = 0
     const lpy = 8 * TILE
     this.leftPassageBounds = new Phaser.Geom.Rectangle(lpx, lpy, TILE, 3 * TILE)
+
+    // Shop booth — right side, in front of Merchant Voss counter (cols 19-22, rows 2-5)
+    this.shopBounds = new Phaser.Geom.Rectangle(600, 185, 112, 45)
+
+    // Oracle Sanctum — hidden passage in north wall, center (cols 11-13, row 0)
+    // Only opens after all 5 Archmage Seals are collected
+    this.sanctumBounds = new Phaser.Geom.Rectangle(344, 0, 96, 56)
+    this.add.text(400, 4, '✦', {
+      fontSize: '10px', color: '#D4AF3744', fontFamily: 'monospace',
+    }).setOrigin(0.5, 0).setDepth(3)
   }
 
   // ── Walkable grid ──────────────────────────────────────────────────────────
@@ -514,7 +526,7 @@ export default class HubScene extends Phaser.Scene {
     const startY = Math.floor(ROWS / 2) * TILE + TILE / 2
 
     this.player = this.physics.add.sprite(startX, startY, 'player')
-    this.player.setDisplaySize(30, 48)           // GBA-scale: ~1 tile wide
+    this.player.setScale(72 / this.player.height)
     this.player.setCollideWorldBounds(true)
     this.player.setDepth(10)
     this.player.body.setSize(20, 20)
@@ -537,7 +549,7 @@ export default class HubScene extends Phaser.Scene {
       const x = def.tileX * TILE + TILE / 2
       const y = def.tileY * TILE + TILE / 2
       const sprite = this.physics.add.sprite(x, y, def.texture)
-      sprite.setDisplaySize(28, 44)
+      sprite.setScale(64 / sprite.height)
       sprite.setDepth(9)
       sprite.setImmovable(true)
       sprite.body.moves = false
@@ -804,7 +816,7 @@ export default class HubScene extends Phaser.Scene {
       BOX_Y + BOX_H / 2,
       npc.def.texture
     ).setDepth(52)
-    portrait.setDisplaySize(56, 110)
+    portrait.setScale(56 / portrait.width)
 
     // Name text on the tab (white bold)
     const nameText = this.add.text(BOX_X + 16, BOX_Y - 14, npc.def.name, {
@@ -912,6 +924,7 @@ export default class HubScene extends Phaser.Scene {
     this.updateNPCPrompts()
     this.checkPortalOverlap()
     this.checkPassages()
+    this.checkSanctumEntrance()
     this.updateStats()
     this.updateMinimap()
   }
@@ -930,6 +943,8 @@ export default class HubScene extends Phaser.Scene {
     if (this.cursors.down.isDown  || this.wasd.down.isDown)  vy = SPEED
     if (vx !== 0 && vy !== 0) { vx *= 0.707; vy *= 0.707 }
     this.player.setVelocity(vx, vy)
+    if (vx < 0) this.player.setFlipX(true)
+    else if (vx > 0) this.player.setFlipX(false)
   }
 
   updateNPCPrompts() {
@@ -964,6 +979,32 @@ export default class HubScene extends Phaser.Scene {
       this.cameras.main.fadeOut(400, 16, 48, 88)
       this.cameras.main.once('camerafadeoutcomplete', () => {
         this.scene.start('Archives')
+      })
+    }
+  }
+
+  checkSanctumEntrance() {
+    if (this.dialogState || this.transitioning) return
+    const sb = this.sanctumBounds
+    if (!sb || !sb.contains(this.player.x, this.player.y)) return
+    const seals = this.registry.get('seals') ?? []
+    if (seals.length >= 5) {
+      this.transitioning = true
+      this.player.setVelocity(0, 0)
+      this.cameras.main.fadeOut(500, 4, 2, 8)
+      this.cameras.main.once('camerafadeoutcomplete', () => {
+        this.scene.start('Sanctum')
+      })
+    } else if (!this._sanctumHintShown) {
+      this._sanctumHintShown = true
+      const gold = this.registry.get('gold') ?? 0
+      const hintText = this.add.text(400, 48, '✦  The vault is sealed. Defeat all five Archmages first.  ✦', {
+        fontSize: '10px', color: '#D4AF37', fontFamily: 'Courier New, monospace',
+        backgroundColor: '#0A0420', padding: { x: 8, y: 4 },
+      }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(60)
+      this.time.delayedCall(3000, () => {
+        if (hintText?.active) hintText.destroy()
+        this._sanctumHintShown = false
       })
     }
   }

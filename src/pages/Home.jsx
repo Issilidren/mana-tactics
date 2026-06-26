@@ -703,7 +703,7 @@ function DeckItem({ deck, isSelected, onSelect, onDelete }) {
 }
 
 // ── Main page ───────────────────────────────────────────────
-export default function Home() {
+export default function Home({ onClose }) {
   const { user, signOut }           = useAuth()
   const navigate                    = useNavigate()
   const [decks, setDecks]           = useState([])
@@ -929,7 +929,7 @@ export default function Home() {
         }}>DECK BUILDER</span>
         <div style={{ display: 'flex', gap: '0.45rem', alignItems: 'center' }}>
           <span style={{ color: '#7090B0', fontSize: '0.68rem', fontFamily: "'Courier New',monospace" }}>{user?.email}</span>
-          <button style={smBtn('#D4AF37')} onClick={() => navigate('/game')}>Enter World</button>
+          <button style={smBtn('#D4AF37')} onClick={() => onClose ? onClose() : navigate('/game')}>Enter World</button>
           <button style={smBtn('#7090B0')} onClick={signOut}>Logout</button>
         </div>
       </div>

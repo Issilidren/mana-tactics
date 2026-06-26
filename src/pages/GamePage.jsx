@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import api from '../lib/axios'
 import PhaserGame from '../game/PhaserGame'
 import BattleScreen from '../game/BattleScreen'
 import ShopOverlay from '../game/ShopOverlay'
+import Home from './Home'
 
 const STARTER_NAMES = {
   white: "Dawn's Shield",
@@ -15,7 +16,7 @@ const STARTER_NAMES = {
 }
 
 export default function GamePage() {
-  const { user }  = useAuth()
+  const { user, signOut }  = useAuth()
   const navigate  = useNavigate()
   const gameRef   = useRef(null)
 
@@ -26,6 +27,7 @@ export default function GamePage() {
   const [prizePackCards, setPrizePackCards] = useState(null)
   const [gameOver, setGameOver] = useState(false)
   const [gameComplete, setGameComplete] = useState(false)
+  const [deckOpen, setDeckOpen] = useState(false)
   const [shopListing, setShopListing]   = useState(null)
   const [progress, setProgress]         = useState(() => ({
     gold:  parseInt(localStorage.getItem('mt_gold')  ?? '0', 10),
@@ -178,6 +180,11 @@ export default function GamePage() {
 
   return (
     <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: '#080510' }}>
+      <GameMenuTab
+        onDeckBuilder={() => setDeckOpen(true)}
+        onExitGame={() => navigate('/')}
+        onSignOut={async () => { try { await signOut?.() } catch (_) {} navigate('/login') }}
+      />
       <PhaserGame
         user={{ ...user, gold: progress.gold, seals: progress.seals, hp: progress.hp }}
         playerDeck={playerCards}
@@ -207,6 +214,22 @@ export default function GamePage() {
           onBuyPack={handleBuyPack}
           onClose={() => setShopOpen(false)}
         />
+      )}
+
+      {deckOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 150, overflowY: 'auto', background: '#080510' }}>
+          <button
+            onClick={() => setDeckOpen(false)}
+            style={{
+              position: 'fixed', top: 12, right: 16, zIndex: 160,
+              background: 'rgba(8,5,16,0.92)', border: '1px solid #D4AF37',
+              color: '#D4AF37', fontFamily: 'Courier New, monospace',
+              fontSize: 18, fontWeight: 'bold', width: 36, height: 36,
+              borderRadius: 6, cursor: 'pointer', lineHeight: 1,
+            }}
+          >✕</button>
+          <Home onClose={() => setDeckOpen(false)} />
+        </div>
       )}
 
       {gameOver && (
@@ -297,6 +320,86 @@ export default function GamePage() {
           onClose={() => setPrizePackCards(null)}
         />
       )}
+    </div>
+  )
+}
+
+function GameMenuTab({ onDeckBuilder, onExitGame, onSignOut }) {
+  const [open, setOpen] = useState(false)
+
+  const btn = (label, icon, onClick, danger) => (
+    <button
+      key={label}
+      onClick={() => { setOpen(false); onClick() }}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        width: '100%', padding: '7px 14px',
+        background: 'transparent', border: 'none',
+        borderBottom: '1px solid rgba(212,175,55,0.15)',
+        color: danger ? '#CC6666' : '#E8DFC8',
+        fontFamily: 'Courier New, monospace', fontSize: 12,
+        fontWeight: 'bold', letterSpacing: '0.05em',
+        cursor: 'pointer', textAlign: 'left',
+        transition: 'background 0.15s',
+      }}
+      onMouseEnter={e => e.currentTarget.style.background = 'rgba(212,175,55,0.1)'}
+      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+    >
+      <span style={{ fontSize: 14, lineHeight: 1 }}>{icon}</span>
+      {label}
+    </button>
+  )
+
+  return (
+    <div style={{ position: 'fixed', bottom: 12, left: 12, zIndex: 100, userSelect: 'none' }}>
+      {/* Expanded panel — slides up from the tab */}
+      {open && (
+        <div style={{
+          marginBottom: 4,
+          background: 'rgba(8,5,16,0.96)',
+          border: '1px solid #D4AF37',
+          borderRadius: 6,
+          overflow: 'hidden',
+          boxShadow: '0 0 20px rgba(0,0,0,0.8), 0 0 8px rgba(212,175,55,0.2)',
+          minWidth: 180,
+        }}>
+          {/* Panel header */}
+          <div style={{
+            padding: '6px 14px',
+            background: 'rgba(212,175,55,0.12)',
+            borderBottom: '1px solid rgba(212,175,55,0.3)',
+            color: '#D4AF37', fontFamily: 'Courier New, monospace',
+            fontSize: 10, letterSpacing: '0.2em', fontWeight: 'bold',
+          }}>
+            — ACADEMY MENU —
+          </div>
+          {btn('Deck Builder', '⚔', onDeckBuilder)}
+          {btn('Exit to Menu', '↩', onExitGame)}
+          {btn('Sign Out', '✕', onSignOut, true)}
+        </div>
+      )}
+
+      {/* Toggle tab button */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '6px 14px',
+          background: open ? 'rgba(212,175,55,0.18)' : 'rgba(8,5,16,0.92)',
+          border: '1px solid #D4AF37',
+          borderRadius: 6,
+          color: '#D4AF37', fontFamily: 'Courier New, monospace',
+          fontSize: 12, fontWeight: 'bold', letterSpacing: '0.08em',
+          cursor: 'pointer',
+          boxShadow: '0 0 10px rgba(0,0,0,0.6)',
+          transition: 'background 0.15s',
+        }}
+        onMouseEnter={e => { if (!open) e.currentTarget.style.background = 'rgba(212,175,55,0.12)' }}
+        onMouseLeave={e => { if (!open) e.currentTarget.style.background = 'rgba(8,5,16,0.92)' }}
+      >
+        <span style={{ fontSize: 16 }}>☰</span>
+        Menu
+      </button>
     </div>
   )
 }

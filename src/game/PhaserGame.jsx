@@ -74,30 +74,6 @@ export default function PhaserGame({ user, playerDeck, onBattleStart, onStarterP
         overflow: 'hidden',
       }}
     >
-      {/* Exit Game button overlay — top-left corner */}
-      <button
-        onClick={onExitGame}
-        style={{
-          position: 'absolute',
-          top: 12,
-          left: 12,
-          zIndex: 100,
-          backgroundColor: 'rgba(26,18,8,0.85)',
-          color: '#D4AF37',
-          border: '1px solid #D4AF37',
-          borderRadius: 4,
-          padding: '4px 10px',
-          fontSize: 12,
-          fontFamily: 'serif',
-          cursor: 'pointer',
-          letterSpacing: '0.03em',
-        }}
-        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(212,175,55,0.2)')}
-        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgba(26,18,8,0.85)')}
-      >
-        ✕ Exit Game
-      </button>
-
       {/* Phaser canvas container */}
       <div
         ref={containerRef}

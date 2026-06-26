@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, Link, Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 const autoFillKill = {
@@ -9,8 +9,11 @@ const autoFillKill = {
 }
 
 export default function Login() {
-  const { signIn } = useAuth()
+  const { user, loading, signIn } = useAuth()
   const navigate   = useNavigate()
+
+  // Already logged in — skip straight to the game
+  if (!loading && user) return <Navigate to="/game" replace />
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [error, setError]       = useState('')
@@ -23,7 +26,7 @@ export default function Login() {
     setSub(true)
     try {
       await signIn(email, password)
-      navigate('/')
+      navigate('/game')
     } catch (err) {
       setError(err.message ?? 'Login failed')
     } finally {
@@ -60,8 +63,8 @@ export default function Login() {
         onSubmit={handleSubmit}
         style={{
           position: 'absolute',
-          left: '44%', top: '39.5%',
-          width: '22.5%', height: '12.5%',
+          left: '41%', top: '39.5%',
+          width: '28.5%', height: '12.5%',
           background: 'rgb(11,17,33)',
           border: '1px solid rgba(90,120,160,0.35)',
           boxSizing: 'border-box',

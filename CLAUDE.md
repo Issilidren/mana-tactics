@@ -36,12 +36,15 @@ Running `npm install` from Windows and WSL installs different native Rollup bina
 
 ## Phaser Scene Flow
 ```
-BootScene → TitleScene → StarterPickScene (first time only) → HubScene
+BootScene → TitleScene (first time) → StarterPickScene (first time) → HubScene
+BootScene → HubScene (returning players — mt_starter already set, TitleScene skipped)
 HubScene ↔ WorldMapScene ↔ ClubScenes (white/blue/black/red/green)
+HubScene → SanctumScene (all 5 seals collected — north wall trigger)
 ClubScene → battle → BattleScreen (React overlay, zIndex 200)
 HubScene → shop booth → ShopOverlay (React overlay, zIndex 200)
+GamePage ☰ Menu → DeckBuilder overlay (Home component, zIndex 150, no route change)
 ```
-- `localStorage('mt_starter')` — tracks whether starter deck was picked
+- `localStorage('mt_starter')` — tracks whether starter deck was picked; BootScene checks this to skip intro
 - `localStorage('mt_gold')` / `localStorage('mt_seals')` — offline cache only; source of truth is Supabase `player_profiles`
 - Phaser → React bridges: `game.events.emit('battleStart', npcData)`, `game.events.emit('starterPicked', data)`, `game.events.emit('shopOpen')`
 - WorldMapScene: White region always open; each subsequent region requires the previous color's seal (blue needs white, black needs blue, etc.)
@@ -53,15 +56,16 @@ src/game/scenes/StarterPickScene.js — 5-color deck picker, Librarian Mira dial
 src/game/scenes/HubScene.js         — overworld hub; 3 NPCs have movement tweens; shop booth zone (cols 19-22) triggers shopOpen on E; portal to WorldMap
 src/game/scenes/WorldMapScene.js    — pixel art overworld; 5 region markers; seal gating (showLockMessage); lock badge on locked regions
 src/game/scenes/ClubScene.js        — per-color club interiors; members have movement tweens (patrol/shift/bob by index); archmage stationary
-src/game/scenes/BootScene.js        — asset preload → starts TitleScene
+src/game/scenes/BootScene.js        — asset preload; skips TitleScene for returning players (checks mt_starter)
+src/game/scenes/SanctumScene.js     — postgame Oracle Vault; 3 alumni duelists (Tasklet/Gemini/Claude); unlocks after 5 seals
 src/game/systems/CardEngine.js      — MTG rules engine (mana, creatures, spells, combat)
 src/game/systems/AIOpponent.js      — AI turn logic (play land → removal → creatures → attack)
 src/game/data/aiDecks.js            — hardcoded NPC deck definitions
 src/game/BattleScreen.jsx           — full battle UI; retreat sends hpDamage:1 to GamePage
 src/game/ShopOverlay.jsx            — booster pack shop UI; card flip reveal animation; logs to purchases table
 src/game/PhaserGame.jsx             — mounts Phaser instance; bridges battleStart/starterPicked/shopOpen events to React
-src/pages/Home.jsx                  — deck builder; imports FRAME/artUrl from cardUtils
-src/pages/GamePage.jsx              — loads deck + progress from Supabase; handles battle/shop/starter events
+src/pages/Home.jsx                  — deck builder; accepts optional onClose prop (closes popup when rendered as overlay)
+src/pages/GamePage.jsx              — loads deck + progress from Supabase; deck builder popup (deckOpen state); GameMenuTab
 src/lib/cardUtils.js                — shared FRAME palette + artUrl() — imported by Home.jsx and ShopOverlay.jsx
 ```
 
@@ -75,7 +79,10 @@ src/lib/cardUtils.js                — shared FRAME palette + artUrl() — impo
 - Regenerate archives: `python scripts/gen_archives.py` → `public/assets/archives-bg.png`
 - Shared drawing utilities: `scripts/iso_utils.py` — imported by all background generators
 - Style target: GBA/FFTA oblique 2.5D — visible wall faces, depth shading, 3/4-view sprites
-- Sprites are 24×32 RGBA; all face SW (lower-left) in 3/4 isometric view
+- Sprites are real-artwork PNGs with transparent backgrounds; sizes vary (portraits ~880-944×1200-1380px)
+- **Extract spritesheet** (player + hub/archives/club NPCs): `python3 scripts/extract_sprites.py` — slices `mana_tactics_character_sprites.png` from Downloads into 9 sprites with background removal + tight-crop; skips ironclad (protected)
+- **Process individual NPCs** (librarian, color NPCs, merchant, caretaker): `python3 scripts/copy_individual_npcs.py` — reads 8 card PNGs from Downloads, removes cream background, crops label, tight-crops
+- Tight-crop uses Pillow `getbbox()` after `remove_background()` — strips all transparent padding so sprites sit flush on tiles
 - **CRITICAL**: Do NOT use or copy assets from `C:\Users\Kenny\Downloads\CelestialShaman_v8_PATCHED\` — that is a completely separate project and is off limits
 
 ## FFTA Extended Tileset (2026-06-25)
@@ -288,6 +295,10 @@ Scripts live at `C:\Users\Kenny\write_*.py`
 - `generate_assets.py` had hardcoded WSL paths for SPRITES_DIR/TILES_DIR — replaced with portable `os.path.dirname(os.path.abspath(__file__))` relative paths (2026-06-25)
 - `declareBlockers()` was a pass-through stub — replaced with MTG-correct flying/reach enforcement: flying attackers can only be blocked by flying or reach creatures; illegal blocks logged and dropped (2026-06-25)
 - `ClubScene.createNPCs()` used plain `this.add.sprite` — upgraded to `this.physics.add.sprite` with `setImmovable(true)` and per-NPC player collider so NPCs act as solid obstacles (2026-06-25)
+- Sprite squishing — `setDisplaySize(w,h)` forced wrong aspect ratio on real-artwork sprites; replaced with `setScale(targetH / sprite.height)` across all 4 scenes (HubScene, ClubScene, ArchivesScene, SanctumScene): player 72px tall, NPCs 64px, dialog portraits 56px wide
+- Floating sprites — extracted sprites had 0–93px of transparent padding at top; Pillow `getbbox()` tight-crop strips it in both `extract_sprites.py` and `copy_individual_npcs.py`
+- Login auth guard — Supabase persists session in localStorage so authenticated users saw the login form on every revisit; added `if (!loading && user) return <Navigate to="/game" replace />` in Login.jsx
+- Refresh-to-intro — refreshing while in-game replayed the TitleScene "press any key" intro; BootScene now checks `localStorage.getItem('mt_starter')` and routes returning players directly to HubScene
 
 ## Postgame — The Legendary Alumni (The Triad)
 Unlocks after player collects all 5 Archmage Seals. Full spec in `docs/Mana_Tactics_Legendary_Alumni_Handoff.md`.
@@ -295,7 +306,7 @@ Unlocks after player collects all 5 Archmage Seals. Full spec in `docs/Mana_Tact
 - **Archon Gemini** — Green/Blue ramp (`deckType: 'triad-gemini'`)
 - **Archon Claude** — Red/White aggro (`deckType: 'triad-claude'`)
 - New scene: `SanctumScene.js` — hidden underground chamber beneath the Academy
-- New sprites needed: `npc-tasklet.png`, `npc-gemini.png`, `npc-claude.png`
+- Sprites complete: `npc-tasklet.png` (906×1374), `npc-gemini.png` (888×1203), `npc-claude.png` (883×1243)
 - Unlock flow: 5th seal → golden particle cutscene → "Invitation of the Triad" → hidden door in HubScene → SanctumScene
 - Lore breadcrumbs to scatter in NPC dialogs — see handoff doc for full script
 - Use `oracle-vault-bg.png` as placeholder background until SanctumScene BG is generated
@@ -311,9 +322,9 @@ Unlocks after player collects all 5 Archmage Seals. Full spec in `docs/Mana_Tact
    - More MTG abilities: vigilance, trample damage bleed-through, lifelink display
 2. **HP recovery mechanic** — player can rest at Hub to restore HP; currently HP floors at 1 and never recovers
 3. **Victory screen** — overlay when `progress.seals.length >= 5 && !activeBattle` (Feature 1 from audit)
-4. **Legendary Alumni postgame** — SanctumScene.js + 3 new sprites + Triad AI decks (see section above)
+4. **Legendary Alumni postgame** — SanctumScene.js scaffold done, sprites done; needs Triad AI decks in `aiDecks.js` + SanctumScene NPC interaction/battle wiring (see Postgame section above)
 5. **Additional academy rooms** — plug-and-play pattern: `gen_*.py` → PNG, new `*Scene.js` mirroring HubScene
-6. **Browser testing visual overhaul** — verify 2.5D backgrounds + 4-corner HUD + 3/4-view sprites look right in-game
+6. ✅ **Visual overhaul** — real artwork sprites loaded, tight-cropped, scaling fixed; 2.5D backgrounds + 4-corner HUD verified
 
 ## MCPs Installed (this project)
 - `puppeteer` — screenshot the running app for visual feedback

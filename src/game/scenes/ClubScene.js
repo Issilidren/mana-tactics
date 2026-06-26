@@ -334,7 +334,7 @@ class ClubScene extends Phaser.Scene {
     const startX = 12 * TILE + TILE / 2
     const startY = 14 * TILE + TILE / 2
     this.player = this.physics.add.sprite(startX, startY, 'player')
-    this.player.setDisplaySize(30, 48)
+    this.player.setScale(72 / this.player.height)
     this.player.setCollideWorldBounds(true)
     this.player.setDepth(10)
     this.player.body.setSize(12, 14)
@@ -350,7 +350,8 @@ class ClubScene extends Phaser.Scene {
     const { archmage, members } = this.cfg
 
     const addNPC = (def, tx, ty) => {
-      const sprite = this.physics.add.sprite(tx, ty, def.texture).setDisplaySize(28, 44).setDepth(9)
+      const sprite = this.physics.add.sprite(tx, ty, def.texture).setDepth(9)
+      sprite.setScale(64 / sprite.height)
       sprite.body.setImmovable(true)
       sprite.body.setSize(20, 22)
       sprite.body.setOffset(2, 5)
@@ -537,7 +538,8 @@ class ClubScene extends Phaser.Scene {
       BOX_X + PORT_W / 2 + 8,
       BOX_Y + BOX_H / 2,
       npc.def.texture,
-    ).setDisplaySize(56, 110).setDepth(52)
+    ).setDepth(52)
+    portrait.setScale(56 / portrait.width)
 
     const nameText = this.add.text(BOX_X + 16, BOX_Y - 14, npc.def.name, {
       fontSize: '12px', color: '#FFFFFF',
@@ -631,6 +633,8 @@ class ClubScene extends Phaser.Scene {
     if (this.cursors.down.isDown  || this.wasd.down.isDown)  vy =  S
     if (vx && vy) { vx *= 0.707; vy *= 0.707 }
     this.player.setVelocity(vx, vy)
+    if (vx < 0) this.player.setFlipX(true)
+    else if (vx > 0) this.player.setFlipX(false)
   }
 
   updatePrompt() {
