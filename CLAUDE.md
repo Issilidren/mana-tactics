@@ -268,14 +268,16 @@ Scripts live at `C:\Users\Kenny\write_*.py`
 - **Land copy limit**: basic lands have no per-card copy limit in deck — only 30-card deck total applies. Non-lands still capped at ×3.
 - `FRAME` and `artUrl` extracted to `src/lib/cardUtils.js` — import from there, not redefined locally
 
-## Sound Engine (2026-06-24)
+## Sound Engine (2026-06-26)
 - `src/game/systems/SoundEngine.js` — Web Audio API procedural chiptune synth (no audio files needed)
 - Singleton exported as named `{ SoundEngine }` — import in any scene/component
 - AudioContext created lazily on first SFX call (satisfies browser autoplay policy)
-- **BGM themes**: `battle`, `hub`, `world`, `archives`, `club` — looping square+triangle wave patterns
-- **SFX methods**: `cardPlay()`, `spellCast()`, `attackHit()`, `lifelinkHeal()`, `victory()`, `defeat()`
+- **BGM themes**: `hub`, `archives`, `world`, `battle`, `club`, `sanctum`, `title` — looping multi-voice arrangements
+- **SFX methods** (call directly — no `playSFX` wrapper): `cardPlay()`, `spellCast()`, `attackHit()`, `creatureDeath()`, `lifelinkHeal()`, `gainLife()`, `victory()`, `defeat()`, `dialogTick()`, `openMenu()`, `closeMenu()`, `confirm()`, `cancel()`, `goldEarn()`, `sealEarn()`, `purchase()`, `error()`, `levelUp()`, `footstep()`, `bump()`, `sceneTransition()`
+- **Volume**: `SoundEngine.setMusicVolume(0-1)`, `SoundEngine.setSFXVolume(0-1)`
 - **Mute**: `SoundEngine.toggleMute()` → returns new muted bool; `SoundEngine.muted` getter
 - **Mute button**: 🔊/🔇 in BattleScreen top bar (right of TURN counter), gold border when unmuted
+- **CRITICAL**: Call SFX methods directly — `SoundEngine.confirm()`, NOT `SoundEngine.playSFX('confirm')` (no such wrapper exists)
 
 ## Known Bugs Fixed
 - `getManaCost` now returns minimum 1 for non-land cards with null/empty mana_cost (was returning 0, making creatures free)
@@ -299,32 +301,35 @@ Scripts live at `C:\Users\Kenny\write_*.py`
 - Floating sprites — extracted sprites had 0–93px of transparent padding at top; Pillow `getbbox()` tight-crop strips it in both `extract_sprites.py` and `copy_individual_npcs.py`
 - Login auth guard — Supabase persists session in localStorage so authenticated users saw the login form on every revisit; added `if (!loading && user) return <Navigate to="/game" replace />` in Login.jsx
 - Refresh-to-intro — refreshing while in-game replayed the TitleScene "press any key" intro; BootScene now checks `localStorage.getItem('mt_starter')` and routes returning players directly to HubScene
+- Triad decks missing — SanctumScene fell back to single-color decks; added `triad-tasklet` (Blue/Black control), `triad-gemini` (White/Blue/Green value), `triad-claude` (Red/Black/Green toolbox) to `aiDecks.js` with 25 new multi-color cards (2026-06-26)
+- **KNOWN BUG (unfixed)**: `Login.jsx` calls `SoundEngine.playSFX('confirm')` etc. — wrapper doesn't exist; throws on login submit. Fix: replace all `playSFX(name)` calls with direct method calls e.g. `SoundEngine.confirm()`
 
 ## Postgame — The Legendary Alumni (The Triad)
 Unlocks after player collects all 5 Archmage Seals. Full spec in `docs/Mana_Tactics_Legendary_Alumni_Handoff.md`.
-- **Archon Tasklet** — Blue/White control (`deckType: 'triad-tasklet'`)
-- **Archon Gemini** — Green/Blue ramp (`deckType: 'triad-gemini'`)
-- **Archon Claude** — Red/White aggro (`deckType: 'triad-claude'`)
-- New scene: `SanctumScene.js` — hidden underground chamber beneath the Academy
-- Sprites complete: `npc-tasklet.png` (906×1374), `npc-gemini.png` (888×1203), `npc-claude.png` (883×1243)
-- Unlock flow: 5th seal → golden particle cutscene → "Invitation of the Triad" → hidden door in HubScene → SanctumScene
-- Lore breadcrumbs to scatter in NPC dialogs — see handoff doc for full script
-- Use `oracle-vault-bg.png` as placeholder background until SanctumScene BG is generated
+- **Archon Tasklet** — Blue/Black control (`deckType: 'triad-tasklet'`) ✅ deck done
+- **Sage Gemini** — White/Blue/Green value (`deckType: 'triad-gemini'`) ✅ deck done
+- **Artificer Claude** — Red/Black/Green toolbox (`deckType: 'triad-claude'`) ✅ deck done
+- Scene: `SanctumScene.js` — Oracle Vault; 3 NPCs fully wired (dialog → battle emit); reward 200 gold each ✅
+- Sprites complete: `npc-tasklet.png` (906×1374), `npc-gemini.png` (888×1203), `npc-claude.png` (883×1243) ✅
+- Unlock gate: HubScene north wall trigger; checks `seals.length >= 5`; shows 3-sec hint if locked ✅
+- BGM: `SoundEngine.startBGM('sanctum')` — ethereal theme ✅
+- Uses `oracle-vault-bg.png` as background (preloaded in BootScene)
 
 ## Pending Work (priority order)
 > ✅ All 7 bugs from the 2026-06-25 Final Audit Handoff are resolved (see Known Bugs Fixed above).
 > ✅ FFTA tileset (16 tiles) integrated and preloaded (2026-06-25).
+> ✅ Legendary Alumni (The Triad) — decks, sprites, scene, gate logic all complete (2026-06-26).
+> ✅ Visual overhaul — real artwork sprites, tight-crop, scaling fixed, 2.5D backgrounds verified.
 
-1. **Battle system polish** (highest priority — most gameplay-visible)
+1. **Login.jsx SoundEngine bug** — `playSFX()` wrapper doesn't exist; replace all calls with direct methods (`SoundEngine.confirm()` etc.) — login currently throws on submit
+2. **Battle system polish** (most gameplay-visible)
    - Card play animations (creature lands on field, spell cast flash)
-   - Win/lose improvements: death state when HP hits 0, recovery mechanic (rest at hub to restore HP)
-   - Better AI difficulty per club/region (academy NPCs easy, archmages hard)
-   - More MTG abilities: vigilance, trample damage bleed-through, lifelink display
-2. **HP recovery mechanic** — player can rest at Hub to restore HP; currently HP floors at 1 and never recovers
-3. **Victory screen** — overlay when `progress.seals.length >= 5 && !activeBattle` (Feature 1 from audit)
-4. **Legendary Alumni postgame** — SanctumScene.js scaffold done, sprites done; needs Triad AI decks in `aiDecks.js` + SanctumScene NPC interaction/battle wiring (see Postgame section above)
-5. **Additional academy rooms** — plug-and-play pattern: `gen_*.py` → PNG, new `*Scene.js` mirroring HubScene
-6. ✅ **Visual overhaul** — real artwork sprites loaded, tight-cropped, scaling fixed; 2.5D backgrounds + 4-corner HUD verified
+   - Death state when HP hits 0; win/lose screen improvements
+   - Better AI difficulty scaling per region
+   - More MTG abilities: vigilance, trample bleed-through, lifelink display
+3. **HP recovery mechanic** — Caretaker Elys NPC has `rest: true` flag in HubScene but GamePage doesn't handle the rest event yet; fix = listen for `restStart` event → deduct 20 gold → restore HP
+4. **Victory screen** — overlay when `progress.seals.length >= 5 && !activeBattle`
+5. **Additional academy rooms** — plug-and-play: `gen_*.py` → PNG, new `*Scene.js` mirroring HubScene
 
 ## MCPs Installed (this project)
 - `puppeteer` — screenshot the running app for visual feedback
