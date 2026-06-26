@@ -115,7 +115,7 @@ export default function Login() {
           type="submit"
           disabled={submitting}
           style={{
-            position: 'fixed',
+            position: 'absolute',
             left: '30%', top: '56%',
             width: '41%', height: '8%',
             background: 'transparent', border: 'none', outline: 'none',

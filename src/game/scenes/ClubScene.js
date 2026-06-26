@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { SoundEngine } from '../systems/SoundEngine.js'
+import { setupPlayerBody, setupNPCBody, handleMovement, createDirectionIndicator, updateDirectionIndicator } from '../systems/MovementHelper.js'
 
 const TILE = 32
 const COLS = 25
@@ -234,6 +235,7 @@ class ClubScene extends Phaser.Scene {
     this.cursors = null
     this.wasd    = null
     this.eKey    = null
+    this.dirIndicator = null
   }
 
   create() {
@@ -248,6 +250,7 @@ class ClubScene extends Phaser.Scene {
     this.drawFloor(walkable).setAlpha(0)   // invisible — physics walls still active
     this.drawPortalDoor()
     this.createPlayer()
+    this.dirIndicator = createDirectionIndicator(this, this.player)
     this.createNPCs()
     this.startNPCBehaviors()
     this.setupCamera()
@@ -276,10 +279,9 @@ class ClubScene extends Phaser.Scene {
         if (!walkable[r][c]) {
           const x = c * TILE + TILE / 2
           const y = r * TILE + TILE / 2
-          const w = this.wallGroup.create(x, y, 'tile-wall')
-          w.setTint(p.wallTint)
-          w.setOrigin(0.5, 0.5)
-          w.refreshBody()
+          const w = this.wallGroup.create(x, y, null)
+          w.body.setSize(TILE, TILE)
+          w.setVisible(false)
         }
       }
     }
@@ -334,11 +336,7 @@ class ClubScene extends Phaser.Scene {
     const startX = 12 * TILE + TILE / 2
     const startY = 14 * TILE + TILE / 2
     this.player = this.physics.add.sprite(startX, startY, 'player')
-    this.player.setScale(72 / this.player.height)
-    this.player.setCollideWorldBounds(true)
-    this.player.setDepth(10)
-    this.player.body.setSize(12, 14)
-    this.player.body.setOffset(2, 10)
+    setupPlayerBody(this.player)
     this.physics.add.collider(this.player, this.wallGroup, () => {
       SoundEngine.bump()
     })
@@ -350,11 +348,8 @@ class ClubScene extends Phaser.Scene {
     const { archmage, members } = this.cfg
 
     const addNPC = (def, tx, ty) => {
-      const sprite = this.physics.add.sprite(tx, ty, def.texture).setDepth(9)
-      sprite.setScale(64 / sprite.height)
-      sprite.body.setImmovable(true)
-      sprite.body.setSize(20, 22)
-      sprite.body.setOffset(2, 5)
+      const sprite = this.physics.add.sprite(tx, ty, def.texture)
+      setupNPCBody(sprite)
       this.physics.add.collider(this.player, sprite)
       this.npcs.push({ def, sprite })
     }
@@ -376,28 +371,32 @@ class ClubScene extends Phaser.Scene {
 
   startNPCBehaviors() {
     // Archmage stays still — members get varied movement by index
+    const minY = 2 * TILE, maxY = 15 * TILE
+    const minX = 2 * TILE, maxX = (COLS - 2) * TILE
     const members = this.npcs.filter(n => n.def !== this.cfg.archmage)
     members.forEach((npc, i) => {
       const base = { targets: npc.sprite, repeat: -1, yoyo: true }
       if (i % 3 === 0) {
-        // Slow vertical patrol — wander up/down 3 tiles
+        // Slow vertical patrol — clamped within walls
+        const targetY = Math.min(npc.sprite.y + 2 * TILE, maxY)
         this.tweens.add({ ...base,
-          y: npc.sprite.y + 3 * 32,
+          y: targetY,
           duration: 3200 + i * 400,
           ease: 'Linear',
           hold: 1200,
         })
       } else if (i % 3 === 1) {
-        // Side-to-side weight shift
+        // Side-to-side weight shift — small, stays in place
+        const targetX = Math.min(npc.sprite.x + 6, maxX)
         this.tweens.add({ ...base,
-          x: npc.sprite.x + 8,
+          x: targetX,
           duration: 1000 + i * 200,
           ease: 'Sine.easeInOut',
         })
       } else {
-        // Gentle idle bob
+        // Gentle idle bob — tiny, just breathing
         this.tweens.add({ ...base,
-          y: npc.sprite.y + 5,
+          y: npc.sprite.y + 4,
           duration: 700 + i * 150,
           ease: 'Sine.easeInOut',
         })
@@ -619,22 +618,14 @@ class ClubScene extends Phaser.Scene {
     this.updatePrompt()
     this.checkPortal()
     this.updateStats()
+    updateDirectionIndicator(this.dirIndicator, this.player)
   }
 
   handleMove() {
     if (this.dialogState || this.transitioning) {
       this.player.setVelocity(0, 0); return
     }
-    const S = 160
-    let vx = 0, vy = 0
-    if (this.cursors.left.isDown  || this.wasd.left.isDown)  vx = -S
-    if (this.cursors.right.isDown || this.wasd.right.isDown) vx =  S
-    if (this.cursors.up.isDown    || this.wasd.up.isDown)    vy = -S
-    if (this.cursors.down.isDown  || this.wasd.down.isDown)  vy =  S
-    if (vx && vy) { vx *= 0.707; vy *= 0.707 }
-    this.player.setVelocity(vx, vy)
-    if (vx < 0) this.player.setFlipX(true)
-    else if (vx > 0) this.player.setFlipX(false)
+    handleMovement(this.player, this.cursors, this.wasd, this.dirIndicator)
   }
 
   updatePrompt() {

@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { SoundEngine } from '../systems/SoundEngine.js'
+import { setupPlayerBody, setupNPCBody, handleMovement, createDirectionIndicator, updateDirectionIndicator } from '../systems/MovementHelper.js'
 
 const TILE = 32
 const COLS = 25
@@ -85,6 +86,7 @@ export default class SanctumScene extends Phaser.Scene {
     this.exitBounds   = null
     this.statsText    = null
     this.transitioning = false
+    this.dirIndicator = null
   }
 
   create() {
@@ -92,6 +94,7 @@ export default class SanctumScene extends Phaser.Scene {
     this.drawMap()
     this.drawVaultDecor()
     this.createPlayer()
+    this.dirIndicator = createDirectionIndicator(this, this.player)
     this.createNPCs()
     this.setupCamera()
     this.setupInput()
@@ -177,11 +180,7 @@ export default class SanctumScene extends Phaser.Scene {
     const startX = 12 * TILE + TILE / 2   // col 12 center = 400
     const startY = 15 * TILE + TILE / 2   // row 15 = 496
     this.player = this.physics.add.sprite(startX, startY, 'player')
-    this.player.setScale(72 / this.player.height)
-    this.player.setCollideWorldBounds(true)
-    this.player.setDepth(10)
-    this.player.body.setSize(12, 14)
-    this.player.body.setOffset(2, 10)
+    setupPlayerBody(this.player)
     this.physics.add.collider(this.player, this.wallGroup, () => {
       SoundEngine.bump()
     })
@@ -195,12 +194,7 @@ export default class SanctumScene extends Phaser.Scene {
       const x = def.tileX * TILE + TILE / 2
       const y = def.tileY * TILE + TILE / 2
       const sprite = this.physics.add.sprite(x, y, def.texture)
-      sprite.setScale(64 / sprite.height)
-      sprite.setDepth(9)
-      sprite.setImmovable(true)
-      sprite.body.moves = false
-      sprite.body.setSize(20, 22)
-      sprite.body.setOffset(2, 5)
+      setupNPCBody(sprite)
       this.physics.add.collider(this.player, sprite)
       this.npcs.push({ def, sprite })
     }
@@ -251,7 +245,7 @@ export default class SanctumScene extends Phaser.Scene {
     })
     this.eKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E)
     this.eKey.on('down', () => this.onEPress())
-    SoundEngine.startBGM('archives')  // use archives BGM until sanctum track added
+    SoundEngine.startBGM('sanctum')
   }
 
   // ── HUD ───────────────────────────────────────────────────────────────────
@@ -434,22 +428,14 @@ export default class SanctumScene extends Phaser.Scene {
     this.updateNPCPrompts()
     this.checkExit()
     this.updateStats()
+    updateDirectionIndicator(this.dirIndicator, this.player)
   }
 
   handleMovement() {
     if (this.dialogState || this.transitioning) {
       this.player.setVelocity(0, 0); return
     }
-    const SPEED = 160
-    let vx = 0, vy = 0
-    if (this.cursors.left.isDown  || this.wasd.left.isDown)  vx = -SPEED
-    if (this.cursors.right.isDown || this.wasd.right.isDown) vx = SPEED
-    if (this.cursors.up.isDown    || this.wasd.up.isDown)    vy = -SPEED
-    if (this.cursors.down.isDown  || this.wasd.down.isDown)  vy = SPEED
-    if (vx !== 0 && vy !== 0) { vx *= 0.707; vy *= 0.707 }
-    this.player.setVelocity(vx, vy)
-    if (vx < 0) this.player.setFlipX(true)
-    else if (vx > 0) this.player.setFlipX(false)
+    handleMovement(this.player, this.cursors, this.wasd, this.dirIndicator)
   }
 
   updateNPCPrompts() {

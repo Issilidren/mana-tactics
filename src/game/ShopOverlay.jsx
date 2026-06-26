@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { FRAME, artUrl } from '../lib/cardUtils'
+import { SoundEngine } from './systems/SoundEngine.js'
 
 const PACK_COLORS = ['#C8A820','#1A66CC','#5522AA','#EE3311','#228833']
 
@@ -22,7 +23,8 @@ export default function ShopOverlay({ listing, gold, onBuyPack, onClose, prizeCa
   // Auto-reveal one card at a time during 'opening' phase
   useEffect(() => {
     if (phase !== 'opening') return
-    if (revealedCount >= cards.length) { setPhase('done'); return }
+    if (revealedCount >= cards.length) { SoundEngine.goldEarn(); setPhase('done'); return }
+    SoundEngine.cardPlay()
     const t = setTimeout(() => setRevealedCount(n => n + 1), 550)
     return () => clearTimeout(t)
   }, [phase, revealedCount, cards.length])
@@ -34,9 +36,11 @@ export default function ShopOverlay({ listing, gold, onBuyPack, onClose, prizeCa
     const result = await onBuyPack()
     setBuying(false)
     if (!result || result.length === 0) {
+      SoundEngine.error()
       setError('Not enough gold or shop unavailable.')
       return
     }
+    SoundEngine.purchase()
     setCards(result)
     setRevealedCount(0)
     setPhase('opening')

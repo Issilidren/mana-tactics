@@ -1,14 +1,14 @@
 import Phaser from 'phaser'
 import { SoundEngine } from '../systems/SoundEngine.js'
 
-// Building positions in worldmap-bg.png (matched to Python generator output)
+// Building positions matched to the isometric world map illustration
 const REGIONS = [
   {
     key: 'white',
     sceneKey: 'ClubWhite',
     name: 'Solara Plains',
     sub: 'Mana Academy',
-    x: 382, y: 180,
+    x: 400, y: 130,
     glow: 0xF0D050,
     border: 0xD4AF37,
   },
@@ -17,7 +17,7 @@ const REGIONS = [
     sceneKey: 'ClubBlue',
     name: 'Tidefall Isles',
     sub: "Scholar's Library",
-    x: 522, y: 236,
+    x: 645, y: 235,
     glow: 0x4488EE,
     border: 0x2266CC,
   },
@@ -26,7 +26,7 @@ const REGIONS = [
     sceneKey: 'ClubBlack',
     name: 'Shadowmere Bog',
     sub: 'Shadow Tower',
-    x: 472, y: 422,
+    x: 565, y: 440,
     glow: 0xBB66FF,
     border: 0x8833CC,
   },
@@ -35,7 +35,7 @@ const REGIONS = [
     sceneKey: 'ClubRed',
     name: 'Embercrest Peaks',
     sub: 'The Forge',
-    x: 232, y: 418,
+    x: 225, y: 435,
     glow: 0xFF5533,
     border: 0xCC2200,
   },
@@ -44,7 +44,7 @@ const REGIONS = [
     sceneKey: 'ClubGreen',
     name: 'Thornveil Woods',
     sub: 'Forest Shrine',
-    x: 165, y: 268,
+    x: 145, y: 255,
     glow: 0x44DD44,
     border: 0x228833,
   },
@@ -62,6 +62,8 @@ export default class WorldMapScene extends Phaser.Scene {
   create() {
     // Background image — replaces all Phaser graphics drawing
     this.add.image(0, 0, 'worldmap-bg').setOrigin(0, 0).setDepth(0)
+
+    SoundEngine.startBGM('world')
 
     this.drawTitlePanel()
     this.drawRegionMarkers()
@@ -248,7 +250,7 @@ export default class WorldMapScene extends Phaser.Scene {
 
   // ── Wandering Merchant ────────────────────────────────────────────────────────
   drawMerchant() {
-    const mx = 330, my = 490
+    const mx = 400, my = 500
     const gold = this.registry.get('gold') ?? 0
 
     const g = this.add.graphics().setDepth(6)

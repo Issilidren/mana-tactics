@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { SoundEngine } from '../systems/SoundEngine.js'
+import { setupPlayerBody, setupNPCBody, handleMovement, createDirectionIndicator, updateDirectionIndicator } from '../systems/MovementHelper.js'
 
 const TILE = 32
 const COLS = 25
@@ -82,6 +83,7 @@ export default class ArchivesScene extends Phaser.Scene {
     this.rightPassageBounds = null
     this.statsText = null
     this.transitioning = false
+    this.dirIndicator = null
   }
 
   create() {
@@ -89,6 +91,7 @@ export default class ArchivesScene extends Phaser.Scene {
     const walkable = this.buildWalkableMap()
     this.drawMap(walkable)
     this.createPlayer()
+    this.dirIndicator = createDirectionIndicator(this, this.player)
     this.createNPCs()
     this.setupCamera()
     this.setupInput()
@@ -136,11 +139,7 @@ export default class ArchivesScene extends Phaser.Scene {
     const startX = (COLS - 3) * TILE + TILE / 2   // col 22 center
     const startY = 9 * TILE + TILE / 2             // row 9 center
     this.player = this.physics.add.sprite(startX, startY, 'player')
-    this.player.setScale(72 / this.player.height)
-    this.player.setCollideWorldBounds(true)
-    this.player.setDepth(10)
-    this.player.body.setSize(12, 14)
-    this.player.body.setOffset(2, 10)
+    setupPlayerBody(this.player)
     this.physics.add.collider(this.player, this.wallGroup, () => {
       SoundEngine.bump()
     })
@@ -151,11 +150,8 @@ export default class ArchivesScene extends Phaser.Scene {
     for (const def of NPC_DEFS) {
       const x = def.tileX * TILE + TILE / 2
       const y = def.tileY * TILE + TILE / 2
-      const sprite = this.physics.add.sprite(x, y, def.texture).setDepth(9)
-      sprite.setScale(64 / sprite.height)
-      sprite.body.setImmovable(true)
-      sprite.body.setSize(20, 22)
-      sprite.body.setOffset(2, 5)
+      const sprite = this.physics.add.sprite(x, y, def.texture)
+      setupNPCBody(sprite)
       this.physics.add.collider(this.player, sprite)
       this.npcs.push({ def, sprite })
     }
@@ -373,22 +369,14 @@ export default class ArchivesScene extends Phaser.Scene {
     this.updateNPCPrompts()
     this.checkRightPassage()
     this.updateStats()
+    updateDirectionIndicator(this.dirIndicator, this.player)
   }
 
   handleMovement() {
     if (this.dialogState || this.transitioning) {
       this.player.setVelocity(0, 0); return
     }
-    const SPEED = 160
-    let vx = 0, vy = 0
-    if (this.cursors.left.isDown  || this.wasd.left.isDown)  vx = -SPEED
-    if (this.cursors.right.isDown || this.wasd.right.isDown) vx = SPEED
-    if (this.cursors.up.isDown    || this.wasd.up.isDown)    vy = -SPEED
-    if (this.cursors.down.isDown  || this.wasd.down.isDown)  vy = SPEED
-    if (vx !== 0 && vy !== 0) { vx *= 0.707; vy *= 0.707 }
-    this.player.setVelocity(vx, vy)
-    if (vx < 0) this.player.setFlipX(true)
-    else if (vx > 0) this.player.setFlipX(false)
+    handleMovement(this.player, this.cursors, this.wasd, this.dirIndicator)
   }
 
   updateNPCPrompts() {
@@ -404,7 +392,7 @@ export default class ArchivesScene extends Phaser.Scene {
     } else if (this.rightPassageBounds?.contains(this.player.x, this.player.y) && !this.dialogState) {
       this.promptLabel.setText('[→] Hub')
       this.promptLabel.setVisible(true)
-      this.promptLabel.setPosition(W - 60, 9 * TILE + 16)
+      this.promptLabel.setPosition(COLS * TILE - 60, 9 * TILE + 16)
     } else {
       this.promptLabel.setVisible(false)
     }

@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { SoundEngine } from '../systems/SoundEngine.js'
+import { setupPlayerBody, setupNPCBody, handleMovement, createDirectionIndicator, updateDirectionIndicator } from '../systems/MovementHelper.js'
 
 const TILE = 32
 const COLS = 25
@@ -146,6 +147,7 @@ export default class HubScene extends Phaser.Scene {
     this.transitioning = false   // CRITICAL: prevents portal from firing every frame
     this.minimapGfx = null
     this.minimapPlayerDot = null
+    this.dirIndicator = null
     this.leftPassageBounds = null
     this.sanctumBounds = null
     this._sanctumHintShown = false
@@ -159,6 +161,7 @@ export default class HubScene extends Phaser.Scene {
     // but we still need the invisible trigger zones:
     this.setupTriggerZones()
     this.createPlayer()
+    this.dirIndicator = createDirectionIndicator(this, this.player)
     this.createNPCs()
     this.setupCamera()
     this.setupInput()
@@ -526,14 +529,7 @@ export default class HubScene extends Phaser.Scene {
     const startY = Math.floor(ROWS / 2) * TILE + TILE / 2
 
     this.player = this.physics.add.sprite(startX, startY, 'player')
-    this.player.setScale(72 / this.player.height)
-    this.player.setCollideWorldBounds(true)
-    this.player.setDepth(10)
-    this.player.body.setSize(20, 20)
-    this.player.body.setOffset(
-      (this.player.width - 20) / 2,
-      this.player.height - 24
-    )
+    setupPlayerBody(this.player)
     this._bumpCooldown = 0
     this.physics.add.collider(this.player, this.wallGroup, () => {
       SoundEngine.bump()
@@ -549,27 +545,22 @@ export default class HubScene extends Phaser.Scene {
       const x = def.tileX * TILE + TILE / 2
       const y = def.tileY * TILE + TILE / 2
       const sprite = this.physics.add.sprite(x, y, def.texture)
-      sprite.setScale(64 / sprite.height)
-      sprite.setDepth(9)
-      sprite.setImmovable(true)
-      sprite.body.moves = false
-      sprite.body.setSize(20, 20)
-      sprite.body.setOffset(
-        (sprite.width - 20) / 2,
-        sprite.height - 24
-      )
+      setupNPCBody(sprite)
       this.physics.add.collider(this.player, sprite)
       this.npcs.push({ def, sprite })
     }
   }
 
   startNPCBehaviors() {
+    const minY = 2 * TILE   // stay inside walls
+    const maxY = 16 * TILE  // stay inside walls
     for (const npc of this.npcs) {
       if (npc.def.key === 'white-scholar') {
-        // Slow patrol between two y positions
+        // Slow patrol between two y positions — clamped to walkable area
+        const targetY = Math.min(npc.def.tileY * TILE + TILE / 2 + 3 * TILE, maxY)
         this.tweens.add({
           targets: npc.sprite,
-          y: npc.def.tileY * TILE + TILE / 2 + 3 * TILE,
+          y: targetY,
           duration: 3500,
           ease: 'Linear',
           yoyo: true,
@@ -927,6 +918,7 @@ export default class HubScene extends Phaser.Scene {
     this.checkSanctumEntrance()
     this.updateStats()
     this.updateMinimap()
+    updateDirectionIndicator(this.dirIndicator, this.player)
   }
 
   handleMovement() {
@@ -934,17 +926,7 @@ export default class HubScene extends Phaser.Scene {
       this.player.setVelocity(0, 0)
       return
     }
-    const SPEED = 160
-    let vx = 0
-    let vy = 0
-    if (this.cursors.left.isDown  || this.wasd.left.isDown)  vx = -SPEED
-    if (this.cursors.right.isDown || this.wasd.right.isDown) vx = SPEED
-    if (this.cursors.up.isDown    || this.wasd.up.isDown)    vy = -SPEED
-    if (this.cursors.down.isDown  || this.wasd.down.isDown)  vy = SPEED
-    if (vx !== 0 && vy !== 0) { vx *= 0.707; vy *= 0.707 }
-    this.player.setVelocity(vx, vy)
-    if (vx < 0) this.player.setFlipX(true)
-    else if (vx > 0) this.player.setFlipX(false)
+    handleMovement(this.player, this.cursors, this.wasd, this.dirIndicator)
   }
 
   updateNPCPrompts() {
@@ -976,8 +958,10 @@ export default class HubScene extends Phaser.Scene {
     if (lb && lb.contains(this.player.x, this.player.y)) {
       this.transitioning = true
       this.player.setVelocity(0, 0)
+      SoundEngine.sceneTransition()
       this.cameras.main.fadeOut(400, 16, 48, 88)
       this.cameras.main.once('camerafadeoutcomplete', () => {
+        SoundEngine.stopBGM()
         this.scene.start('Archives')
       })
     }
@@ -991,8 +975,10 @@ export default class HubScene extends Phaser.Scene {
     if (seals.length >= 5) {
       this.transitioning = true
       this.player.setVelocity(0, 0)
+      SoundEngine.sceneTransition()
       this.cameras.main.fadeOut(500, 4, 2, 8)
       this.cameras.main.once('camerafadeoutcomplete', () => {
+        SoundEngine.stopBGM()
         this.scene.start('Sanctum')
       })
     } else if (!this._sanctumHintShown) {
@@ -1015,8 +1001,10 @@ export default class HubScene extends Phaser.Scene {
     if (pb && pb.contains(this.player.x, this.player.y)) {
       this.transitioning = true                    // ← guard prevents re-fire
       this.player.setVelocity(0, 0)
+      SoundEngine.sceneTransition()
       this.cameras.main.fadeOut(500, 16, 48, 88)  // fade to dark GBC navy
       this.cameras.main.once('camerafadeoutcomplete', () => {
+        SoundEngine.stopBGM()
         this.scene.start('WorldMap')
       })
     }
