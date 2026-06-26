@@ -656,6 +656,24 @@ class SoundEngineClass {
     this.setMuted(!this._muted)
     return this._muted
   }
+
+  // ── Volume controls (0.0 – 1.0) ────────────────────────────────────────────
+  setMusicVolume(v) {
+    this._musicVol = Math.max(0, Math.min(1, v))
+    // Music volume affects master gain when BGM is playing
+    if (this._masterGain) {
+      this._masterGain.gain.value = 0.7 * this._musicVol
+    }
+  }
+
+  setSFXVolume(v) {
+    this._sfxVol = Math.max(0, Math.min(1, v))
+  }
+
+  // Override _voice to respect SFX volume
+  get _effectiveVol() {
+    return this._sfxVol ?? 1
+  }
 }
 
 export const SoundEngine = new SoundEngineClass()
