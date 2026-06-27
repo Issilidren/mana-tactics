@@ -1,6 +1,13 @@
 // AIOpponent.js — AI decision making for card battles
 import { getManaCost } from './CardEngine.js'
 
+// Case-insensitive ability check (mirrors CardEngine.hasAbility)
+function hasAb(card, ab) {
+  if (!card?.abilities) return false
+  const norm = ab.toLowerCase().replace(/[\s_]/g, '')
+  return card.abilities.some(a => a.toLowerCase().replace(/[\s_]/g, '') === norm)
+}
+
 export class AIOpponent {
   constructor(engine, difficulty = 'normal') {
     this.engine = engine
@@ -194,10 +201,8 @@ export class AIOpponent {
       // - We kill blocker and survive
       // - We kill blocker (favorable trade) and our life is comfortable
       // - We have flying and they have no flying blockers
-      const hasFlying = slot.card.abilities && slot.card.abilities.includes('flying')
-      const noFlyingBlockers = player.battlefield.every(s =>
-        !s.card.abilities || !s.card.abilities.includes('flying')
-      )
+      const hasFlying = hasAb(slot.card, 'flying')
+      const noFlyingBlockers = player.battlefield.every(s => !hasAb(s.card, 'flying'))
 
       if (hasFlying && noFlyingBlockers) {
         attackerIndices.push(i)
@@ -262,8 +267,8 @@ export class AIOpponent {
       const attackPow = attackerSlot.card.power
       const attackTough = attackerSlot.card.toughness
 
-      // Flying attacker — only flying creatures can block
-      const hasFlying = attackerSlot.card.abilities && attackerSlot.card.abilities.includes('flying')
+      // Flying attacker — only flying or reach creatures can block
+      const hasFlying = hasAb(attackerSlot.card, 'flying')
 
       // Find best blocker for this attacker
       let bestBlockerIdx = null
@@ -275,11 +280,7 @@ export class AIOpponent {
         if (!bSlot || bSlot.card.type !== 'creature') continue
 
         // Flying check — reach can also block flying
-        if (hasFlying) {
-          const bFlying = bSlot.card.abilities && bSlot.card.abilities.includes('flying')
-          const bReach  = bSlot.card.abilities && bSlot.card.abilities.includes('reach')
-          if (!bFlying && !bReach) continue
-        }
+        if (hasFlying && !hasAb(bSlot.card, 'flying') && !hasAb(bSlot.card, 'reach')) continue
 
         const bPow = bSlot.card.power
         const bTough = bSlot.card.toughness

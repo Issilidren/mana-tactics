@@ -10,12 +10,40 @@ function shuffle(arr) {
   return arr
 }
 
+// MTG keyword abilities to detect in oracle text.
+// Order matters: multi-word keywords come before their component words.
+const KEYWORD_LIST = [
+  'first strike', 'double strike',
+  'flying', 'haste', 'trample', 'vigilance', 'lifelink', 'deathtouch',
+  'reach', 'hexproof', 'shroud', 'indestructible', 'flash', 'menace',
+  'split_second', 'magecraft',
+]
+
+function parseKeywordsFromOracle(text) {
+  if (!text) return []
+  const lower = text.toLowerCase()
+  const found = []
+  for (const kw of KEYWORD_LIST) {
+    // Build a word-boundary regex so "nonflying" doesn't match "flying"
+    const pattern = kw.replace(/_/g, ' ').split(' ').map(w => `\\b${w}\\b`).join('\\s+')
+    if (new RegExp(pattern).test(lower)) found.push(kw)
+  }
+  return found
+}
+
 function flattenDeck(deckCards) {
   const flat = []
   for (const entry of deckCards) {
     const card = entry.card || entry
     const qty = entry.quantity || 1
-    for (let i = 0; i < qty; i++) flat.push({ ...card })
+    for (let i = 0; i < qty; i++) {
+      const c = { ...card }
+      // Supabase Scryfall cards have abilities: null — parse from oracle text
+      if (!c.abilities || c.abilities.length === 0) {
+        c.abilities = parseKeywordsFromOracle(c.description)
+      }
+      flat.push(c)
+    }
   }
   return flat
 }
@@ -53,121 +81,156 @@ function ensureLands(deckCards, color) {
 }
 
 // ── Spell effect parser ───────────────────────────────────────────────────────
-// Reads the card's Oracle description text and returns a structured effect.
-// Falls back to the abilities array via _effectFromAbilities when text is unrecognized.
-function parseSpellEffect(description) {
-  if (!description) return null
+// Returns an ARRAY of every effect encoded in the description.
+// Counter is no longer an early-return: side effects (draw, discard, mana) on
+// counter spells like Soul Manipulation / Mana Drain / Arcane Denial all fire.
+// Scry and Search still return early because they need interactive UI.
+function parseAllSpellEffects(description) {
+  if (!description) return []
   const desc = description.toLowerCase()
 
-  // Damage effects
-  const dealMatch = desc.match(/deal[s]? (\d+) damage/) || desc.match(/deals? (\d+) damage/)
-  if (dealMatch) return { type: 'damage', amount: parseInt(dealMatch[1]) }
+  // Dig Through Time style: "look at top N, put X of them into your hand"
+  // Multiple regex variants handle different Scryfall oracle text phrasings
+  const WORD_NUMS = { one:1, two:2, three:3, four:4, five:5, six:6, seven:7 }
+  const _parseWordOrNum = s => (/^\d+$/.test(s) ? parseInt(s) : (WORD_NUMS[s] || 2))
 
-  // Draw effects
-  const drawMatch = desc.match(/draw (\d+) cards?/)
-  if (drawMatch) return { type: 'draw', amount: parseInt(drawMatch[1]) }
-  if (desc.includes('draw a card') && !desc.includes('draw a card for each')) return { type: 'draw', amount: 1 }
+  // Matches any of: "put 2 of them into your hand", "put two of those into your hand",
+  //                 "put 2 cards into your hand", or the fallback look-at-top + into-hand pattern
+  const _intoHandNum = (() => {
+    let m
+    if ((m = desc.match(/put (\d+) of (?:them|those)[\w\s]*?into your hand/))) return parseInt(m[1])
+    if ((m = desc.match(/put (one|two|three|four|five|six|seven) of (?:them|those)[\w\s]*?into your hand/))) return _parseWordOrNum(m[1])
+    if ((m = desc.match(/put (\d+) cards? into your hand/))) return parseInt(m[1])
+    if (desc.includes('look at the top') && desc.includes('into your hand')) return 2
+    return null
+  })()
+  if (_intoHandNum !== null) return [{ type: 'draw', amount: _intoHandNum }]
 
-  // Lifegain effects — check before counter to avoid "gain life" in other text
-  const gainMatch = desc.match(/(?:you )?gain (\d+) life/) || desc.match(/gains? (\d+) life/)
-  if (gainMatch) return { type: 'lifegain', amount: parseInt(gainMatch[1]) }
+  // Scry / look at top (interactive — keep as early return)
+  const scryM = desc.match(/scry (\d+)/)
+  if (scryM) return [{ type: 'scry', amount: parseInt(scryM[1]) }]
+  const lookM = desc.match(/look at the top (\d+) cards?/)
+  if (lookM) return [{ type: 'scry', amount: parseInt(lookM[1]) }]
+  // word-form: "look at the top seven cards"
+  const lookWordM = desc.match(/look at the top (one|two|three|four|five|six|seven) cards?/)
+  if (lookWordM) return [{ type: 'scry', amount: _parseWordOrNum(lookWordM[1]) }]
+  if (desc.includes('look at the top card')) return [{ type: 'scry', amount: 1 }]
 
-  // Counters / discard
-  if (desc.includes('counter target spell') || desc.includes('negate') || desc.includes('counter target')) {
-    return { type: 'counter' }
+  // Search / tutor (interactive — early return)
+  if (desc.includes('search your library') || desc.includes('tutor') ||
+      desc.includes('from outside the game') || desc.includes('mastermind')) {
+    return [{ type: 'search' }]
   }
 
-  // Board wipes — check before single-target destroy
-  if (
-    desc.includes('destroy all creatures') ||
-    desc.includes('destroy all nonland') ||
-    desc.includes('exile all creatures') ||
-    desc.includes('all creatures get') ||
-    desc.includes('deals damage equal') ||
-    desc.match(/destroy all/)
-  ) {
-    return { type: 'boardwipe' }
+  const effects = []
+
+  // Counter — no longer early return; side effects below will also apply
+  if (desc.includes('counter target spell') || desc.includes('counter target') ||
+      desc.includes('negate') || desc.includes('cannot be countered') === false && desc.includes('negate')) {
+    effects.push({ type: 'counter' })
   }
 
-  // Exile target (treat as destroy but no graveyard)
-  if (
-    desc.includes('exile target creature') ||
-    desc.includes('exile target') ||
-    (desc.includes('exile') && (desc.includes('target') || desc.includes('creature')))
-  ) {
-    return { type: 'exile' }
+  // Damage
+  const dealM = desc.match(/deal[s]? (\d+) damage/) || desc.match(/deals? (\d+) damage/)
+  if (dealM) effects.push({ type: 'damage', amount: parseInt(dealM[1]) })
+
+  // Brainstorm-style net draw: "draw X cards, then put Y cards from your hand on top"
+  const netDrawM = desc.match(/draw (\d+) cards?, then put (\d+) cards? from your hand/)
+  if (netDrawM) {
+    const net = parseInt(netDrawM[1]) - parseInt(netDrawM[2])
+    if (net > 0) effects.push({ type: 'draw', amount: net })
+  } else {
+    const drawM = desc.match(/draw (\d+) cards?/)
+    if (drawM) effects.push({ type: 'draw', amount: parseInt(drawM[1]) })
+    else if (desc.includes('draw a card') && !desc.includes('draw a card for each')) effects.push({ type: 'draw', amount: 1 })
   }
 
-  // Destroy target
-  if (desc.includes('destroy target creature') || desc.includes('destroy target')) {
-    return { type: 'destroy' }
+  // Lifegain
+  const gainM = desc.match(/(?:you )?gain (\d+) life/) || desc.match(/gains? (\d+) life/)
+  if (gainM) effects.push({ type: 'lifegain', amount: parseInt(gainM[1]) })
+
+  // Boardwipe
+  const isBoardwipe = desc.includes('destroy all creatures') || desc.includes('destroy all nonland') ||
+    desc.includes('exile all creatures') || desc.includes('all creatures get') || !!desc.match(/destroy all/)
+  if (isBoardwipe) {
+    effects.push({ type: 'boardwipe' })
+  } else {
+    if (desc.includes('exile target creature') || desc.includes('exile target')) {
+      effects.push({ type: 'exile' })
+    }
+    if (!effects.some(e => e.type === 'exile') &&
+        (desc.includes('destroy target creature') || desc.includes('destroy target'))) {
+      effects.push({ type: 'destroy' })
+    }
+    if (desc.includes('return target creature') || desc.includes('return target') ||
+        (desc.includes('return') && desc.includes('hand'))) {
+      effects.push({ type: 'bounce' })
+    }
   }
 
-  // Bounce — return to hand
-  if (
-    desc.includes('return target creature') ||
-    desc.includes("return target") ||
-    desc.includes("return target nonland permanent") ||
-    desc.includes('return to') && desc.includes("hand")
-  ) {
-    return { type: 'bounce' }
-  }
+  // Untap lands — Snap: "Untap up to two lands"
+  const untapM = desc.match(/untap up to (\d+) lands?/)
+  if (untapM) effects.push({ type: 'untapLands', amount: parseInt(untapM[1]) })
 
   // Mill
-  const millMatch = desc.match(/mill (\d+)/) ||
+  const millM = desc.match(/mill (\d+)/) ||
     desc.match(/put the top (\d+) cards? of (?:target )?(?:their|your|a) library into (?:their|your|the) graveyard/) ||
     desc.match(/target player puts? the top (\d+)/)
-  if (millMatch) return { type: 'mill', amount: parseInt(millMatch[1]) }
+  if (millM) effects.push({ type: 'mill', amount: parseInt(millM[1]) })
 
-  // Pump — +N/+N until end of turn
-  const pumpMatch = desc.match(/\+(\d+)\/\+(\d+) until end of turn/)
-  if (pumpMatch) return { type: 'pump', power: parseInt(pumpMatch[1]), toughness: parseInt(pumpMatch[2]) }
+  // Pump
+  const pumpM = desc.match(/\+(\d+)\/\+(\d+) until end of turn/)
+  if (pumpM) effects.push({ type: 'pump', power: parseInt(pumpM[1]), toughness: parseInt(pumpM[2]) })
 
-  // Mana burst
-  const manaMatch = desc.match(/add (\d+) mana/) || desc.match(/add {(\d+)} to your mana pool/)
-  if (manaMatch) return { type: 'mana', amount: parseInt(manaMatch[1]) }
-
-  // Discard — target player discards
-  const discardMatch = desc.match(/discards? (\d+) cards?/) || desc.match(/target player discards/)
-  if (discardMatch) {
-    const amount = discardMatch[1] ? parseInt(discardMatch[1]) : 1
-    return { type: 'discard', amount, target: 'opponent' }
+  // Mana burst — Mana Drain style: simplified as immediate mana
+  const manaM = desc.match(/add (\d+) mana/) || desc.match(/add {(\d+)} to your mana pool/) ||
+    desc.match(/add an amount of.*equal to that spell.*mana value/)
+  if (manaM) {
+    const amt = manaM[1] ? parseInt(manaM[1]) : 3
+    effects.push({ type: 'mana', amount: amt })
   }
 
-  // Search / tutor effects
-  if (
-    desc.includes('search your library') ||
-    desc.includes('searches? your library') ||
-    desc.includes('tutor') ||
-    desc.includes('from outside the game') ||
-    desc.includes('mastermind')
-  ) {
-    return { type: 'search' }
+  // Discard (opponent) — skip if already have counter to avoid double-parsing
+  // "discards X" matches real discard effects, not reminder text
+  const discardM = desc.match(/(?:opponent|player|controller) discards? (\d+) cards?/) ||
+    desc.match(/target player discards? (\d+)/) ||
+    (!effects.some(e => e.type === 'counter') && desc.match(/discards? (\d+) cards?/))
+  if (discardM) {
+    const amount = discardM[1] ? parseInt(discardM[1]) : 1
+    effects.push({ type: 'discard', amount, target: 'opponent' })
   }
 
-  // Token creation — simplified: summon a small creature
-  const tokenMatch = desc.match(/create (\d+) (\d+)\/(\d+) (?:\w+ )*creature token/)
-  if (tokenMatch) {
-    return { type: 'token', count: parseInt(tokenMatch[1]), power: parseInt(tokenMatch[2]), toughness: parseInt(tokenMatch[3]) }
-  }
-  if (desc.includes('create') && desc.includes('token')) {
-    return { type: 'token', count: 1, power: 1, toughness: 1 }
+  // Token creation
+  const tokenM = desc.match(/create (\d+) (\d+)\/(\d+) (?:\w+ )*creature token/)
+  if (tokenM) {
+    effects.push({ type: 'token', count: parseInt(tokenM[1]), power: parseInt(tokenM[2]), toughness: parseInt(tokenM[3]) })
+  } else if (desc.includes('create') && desc.includes('token')) {
+    effects.push({ type: 'token', count: 1, power: 1, toughness: 1 })
   }
 
-  return null
+  return effects
 }
 
 // ── ETB trigger parser ────────────────────────────────────────────────────────
-function parseETBEffect(description) {
-  if (!description) return null
+// Returns an array of ALL effects the creature triggers on entering the battlefield.
+function parseAllETBEffects(description) {
+  if (!description) return []
   const desc = description.toLowerCase()
-  // Match "when [card name / ~ / this / it] enters [the battlefield][,] [effect]"
+  let effectText = null
   const m = desc.match(/when (?:~|this|.+?) enters(?: the battlefield)?[,\s]+(.+?)(?:\.|;|$)/)
-  if (m) return parseSpellEffect(m[1].trim())
-  // Fallback: plain "enters the battlefield," pattern
-  const m2 = desc.match(/enters the battlefield[,:\s]+(.+?)(?:\.|;|$)/)
-  if (m2) return parseSpellEffect(m2[1].trim())
-  return null
+  if (m) effectText = m[1].trim()
+  else {
+    const m2 = desc.match(/enters the battlefield[,:\s]+(.+?)(?:\.|;|$)/)
+    if (m2) effectText = m2[1].trim()
+  }
+  if (!effectText) return []
+  return parseAllSpellEffects(effectText)
+}
+
+// Keep single-effect version for activated ability fallback
+function parseSpellEffect(description) {
+  const effects = parseAllSpellEffects(description)
+  return effects.length > 0 ? effects[0] : null
 }
 
 // ── Activated ability parser ──────────────────────────────────────────────────
@@ -324,9 +387,8 @@ export class CardEngine {
       this._log(`${who} gains 2 life from ${card.name} (life: ${p.life})`)
     }
 
-    // ETB effect from Oracle text
-    const etbEffect = parseETBEffect(card.description)
-    if (etbEffect) {
+    // ETB effects — loop over ALL effects the card triggers on entry
+    for (const etbEffect of parseAllETBEffects(card.description)) {
       const etbResult = this._resolveETBEffect(who, card, etbEffect)
       if (etbResult?.needsTarget) {
         this.checkWinner()
@@ -346,17 +408,21 @@ export class CardEngine {
     if (handIndex < 0 || handIndex >= p.hand.length) return { ok: false, error: 'Invalid hand index' }
 
     const card = p.hand[handIndex]
-    if (card.type !== 'instant' && card.type !== 'sorcery' && card.type !== 'spell') {
+    const SPELL_TYPES = ['instant', 'sorcery', 'spell', 'enchantment', 'artifact']
+    if (!SPELL_TYPES.includes(card.type)) {
       return { ok: false, error: 'Not a spell card' }
     }
 
-    // Sorcery timing: only during your own main phase
-    if (card.type === 'sorcery') {
+    const isSplitSecond = hasAbility(card, 'split_second')
+
+    // Sorcery/permanent timing: only during your own main phase
+    const isSorcerySpeed = card.type === 'sorcery' || card.type === 'enchantment' || card.type === 'artifact'
+    if (isSorcerySpeed) {
       if (this.state.activePlayer !== who) {
-        return { ok: false, error: 'Sorceries can only be cast on your own turn' }
+        return { ok: false, error: 'Permanents can only be cast on your own turn' }
       }
-      if (this.state.phase !== 'main' && this.state.phase !== 'main2') {
-        return { ok: false, error: 'Sorceries can only be cast during a main phase' }
+      if (this.state.phase !== 'main') {
+        return { ok: false, error: 'Permanents can only be cast during your main phase' }
       }
     }
 
@@ -367,19 +433,56 @@ export class CardEngine {
     this._tapLandsForCost(p, cost)
     p.hand = p.hand.filter((_, i) => i !== handIndex)
 
-    const effect = parseSpellEffect(card.description) || this._effectFromAbilities(card)
+    if (isSplitSecond) this._log(`⚡ ${card.name} — Split second! Cannot be responded to.`)
 
-    let applied = false
-    if (effect) {
+    // Collect ALL effects from description; fall back to abilities array if none found
+    const effects = parseAllSpellEffects(card.description)
+    if (effects.length === 0) {
+      const fallback = this._effectFromAbilities(card)
+      if (fallback) effects.push(fallback)
+    }
+
+    if (effects.length === 0) {
+      this._log(`${card.name} resolves`)
+      p.graveyard = [...p.graveyard, card]
+      this.checkWinner()
+      return { ok: true, applied: false }
+    }
+
+    let counterPending = false
+
+    for (const effect of effects) {
       switch (effect.type) {
+        // ── Interactive effects — spell goes to graveyard then returns a signal ──
+        case 'scry': {
+          const scryCards = p.library.slice(0, effect.amount)
+          p.graveyard = [...p.graveyard, card]
+          this.checkWinner()
+          return { ok: true, applied: true, needsChoice: 'scry', scryCards, amount: effect.amount }
+        }
+        case 'search': {
+          p.graveyard = [...p.graveyard, card]
+          this.checkWinner()
+          return { ok: true, applied: true, needsChoice: 'search', library: [...p.library] }
+        }
+        case 'counter': {
+          // Don't return early — side effects (draw, discard, mana) still apply
+          counterPending = true
+          break
+        }
+
+        // ── Non-interactive effects — all run, then card goes to graveyard at end ──
         case 'damage': {
           if (targetType === 'creature' && targetIndex >= 0 && targetIndex < opp.battlefield.length) {
             const slot = opp.battlefield[targetIndex]
-            slot.damage += effect.amount
-            this._log(`${card.name} deals ${effect.amount} damage to ${slot.card.name}`)
-            this._destroyDamaged(oppName)
-          } else if ((targetType === 'creature' || targetType === 'own_creature') && targetIndex >= 0 && targetIndex < p.battlefield.length) {
-            // Can target own creature (e.g. Giant Growth targets own)
+            if (hasAbility(slot.card, 'hexproof')) {
+              this._log(`${card.name} — ${slot.card.name} has hexproof and cannot be targeted`)
+            } else {
+              slot.damage += effect.amount
+              this._log(`${card.name} deals ${effect.amount} damage to ${slot.card.name}`)
+              this._destroyDamaged(oppName)
+            }
+          } else if (targetType === 'own_creature' && targetIndex >= 0 && targetIndex < p.battlefield.length) {
             const slot = p.battlefield[targetIndex]
             slot.damage += effect.amount
             this._log(`${card.name} deals ${effect.amount} damage to ${slot.card.name}`)
@@ -388,47 +491,39 @@ export class CardEngine {
             opp.life -= effect.amount
             this._log(`${card.name} deals ${effect.amount} damage to ${oppName} (life: ${opp.life})`)
           }
-          applied = true
           break
         }
         case 'draw': {
           for (let i = 0; i < effect.amount; i++) this.drawCard(who)
-          applied = true
           break
         }
         case 'lifegain': {
           p.life += effect.amount
           this._log(`${card.name} — ${who} gains ${effect.amount} life (life: ${p.life})`)
-          applied = true
-          break
-        }
-        case 'counter': {
-          if (opp.hand.length > 0) {
-            const discarded = opp.hand[opp.hand.length - 1]
-            opp.hand = opp.hand.slice(0, -1)
-            opp.graveyard = [...opp.graveyard, discarded]
-            this._log(`${card.name} counters — ${oppName} discards ${discarded.name}`)
-          } else {
-            this._log(`${card.name} counters but ${oppName} has no cards in hand`)
-          }
-          applied = true
           break
         }
         case 'discard': {
           const count = Math.min(effect.amount || 1, opp.hand.length)
-          const discarded = opp.hand.slice(-count)
-          opp.hand = opp.hand.slice(0, -count)
-          opp.graveyard = [...opp.graveyard, ...discarded]
-          this._log(`${card.name} — ${oppName} discards ${count} card(s)`)
-          applied = true
+          if (count > 0) {
+            const discarded = opp.hand.slice(-count)
+            opp.hand = opp.hand.slice(0, opp.hand.length - count)
+            opp.graveyard = [...opp.graveyard, ...discarded]
+            this._log(`${card.name} — ${oppName} discards ${count} card(s)`)
+          } else {
+            this._log(`${card.name} — ${oppName} has no cards to discard`)
+          }
           break
         }
         case 'destroy': {
           if (targetType === 'creature' && targetIndex >= 0 && targetIndex < opp.battlefield.length) {
             const slot = opp.battlefield[targetIndex]
-            opp.graveyard = [...opp.graveyard, slot.card]
-            opp.battlefield = opp.battlefield.filter((_, i) => i !== targetIndex)
-            this._log(`${card.name} destroys ${slot.card.name}`)
+            if (hasAbility(slot.card, 'hexproof')) {
+              this._log(`${card.name} — ${slot.card.name} has hexproof and cannot be targeted`)
+            } else {
+              opp.graveyard = [...opp.graveyard, slot.card]
+              opp.battlefield = opp.battlefield.filter((_, i) => i !== targetIndex)
+              this._log(`${card.name} destroys ${slot.card.name}`)
+            }
           } else if (targetType === 'own_creature' && targetIndex >= 0 && targetIndex < p.battlefield.length) {
             const slot = p.battlefield[targetIndex]
             p.graveyard = [...p.graveyard, slot.card]
@@ -437,15 +532,17 @@ export class CardEngine {
           } else {
             this._log(`${card.name} — no valid target to destroy`)
           }
-          applied = true
           break
         }
         case 'exile': {
-          // Exile is like destroy but doesn't go to graveyard
           if (targetType === 'creature' && targetIndex >= 0 && targetIndex < opp.battlefield.length) {
             const slot = opp.battlefield[targetIndex]
-            opp.battlefield = opp.battlefield.filter((_, i) => i !== targetIndex)
-            this._log(`${card.name} exiles ${slot.card.name}`)
+            if (hasAbility(slot.card, 'hexproof')) {
+              this._log(`${card.name} — ${slot.card.name} has hexproof and cannot be targeted`)
+            } else {
+              opp.battlefield = opp.battlefield.filter((_, i) => i !== targetIndex)
+              this._log(`${card.name} exiles ${slot.card.name}`)
+            }
           } else if (targetType === 'own_creature' && targetIndex >= 0 && targetIndex < p.battlefield.length) {
             const slot = p.battlefield[targetIndex]
             p.battlefield = p.battlefield.filter((_, i) => i !== targetIndex)
@@ -453,17 +550,19 @@ export class CardEngine {
           } else {
             this._log(`${card.name} — no valid target to exile`)
           }
-          applied = true
           break
         }
         case 'bounce': {
-          // Return target creature to owner's hand
           if (targetType === 'creature' && targetIndex >= 0 && targetIndex < opp.battlefield.length) {
             const slot = opp.battlefield[targetIndex]
-            opp.hand = [...opp.hand, slot.card]
-            opp.battlefield = opp.battlefield.filter((_, i) => i !== targetIndex)
-            this._log(`${card.name} returns ${slot.card.name} to ${oppName}'s hand`)
-          } else if ((targetType === 'creature' || targetType === 'own_creature') && targetIndex >= 0 && targetIndex < p.battlefield.length) {
+            if (hasAbility(slot.card, 'hexproof')) {
+              this._log(`${card.name} — ${slot.card.name} has hexproof and cannot be targeted`)
+            } else {
+              opp.hand = [...opp.hand, slot.card]
+              opp.battlefield = opp.battlefield.filter((_, i) => i !== targetIndex)
+              this._log(`${card.name} returns ${slot.card.name} to ${oppName}'s hand`)
+            }
+          } else if (targetType === 'own_creature' && targetIndex >= 0 && targetIndex < p.battlefield.length) {
             const slot = p.battlefield[targetIndex]
             p.hand = [...p.hand, slot.card]
             p.battlefield = p.battlefield.filter((_, i) => i !== targetIndex)
@@ -471,18 +570,14 @@ export class CardEngine {
           } else {
             this._log(`${card.name} — no valid target to bounce`)
           }
-          applied = true
           break
         }
         case 'boardwipe': {
-          const killedOpp = opp.battlefield.map(s => s.card)
-          const killedSelf = p.battlefield.map(s => s.card)
-          opp.graveyard = [...opp.graveyard, ...killedOpp]
-          p.graveyard = [...p.graveyard, ...killedSelf]
+          opp.graveyard = [...opp.graveyard, ...opp.battlefield.map(s => s.card)]
+          p.graveyard   = [...p.graveyard,   ...p.battlefield.map(s => s.card)]
           opp.battlefield = []
-          p.battlefield = []
+          p.battlefield   = []
           this._log(`${card.name} — ALL creatures destroyed!`)
-          applied = true
           break
         }
         case 'mill': {
@@ -491,66 +586,74 @@ export class CardEngine {
             if (milled) opp.graveyard = [...opp.graveyard, milled]
           }
           this._log(`${card.name} mills ${effect.amount} cards from ${oppName}'s library`)
-          applied = true
           break
         }
         case 'pump': {
-          if (targetType === 'creature' && targetIndex >= 0 && targetIndex < p.battlefield.length) {
-            const slot = p.battlefield[targetIndex]
-            slot.card = {
-              ...slot.card,
-              power:     slot.card.power     + effect.power,
-              toughness: slot.card.toughness + effect.toughness,
-            }
-            this._tempBuffs.push({ who, bfIndex: targetIndex, power: effect.power, toughness: effect.toughness })
+          const pumpIdx = (targetType === 'own_creature' || targetType === 'creature') ? targetIndex : -1
+          if (pumpIdx >= 0 && pumpIdx < p.battlefield.length) {
+            const slot = p.battlefield[pumpIdx]
+            slot.card = { ...slot.card, power: slot.card.power + effect.power, toughness: slot.card.toughness + effect.toughness }
+            this._tempBuffs.push({ who, cardId: slot.card.id, power: effect.power, toughness: effect.toughness })
             this._log(`${slot.card.name} gets +${effect.power}/+${effect.toughness} until end of turn`)
           }
-          applied = true
           break
         }
         case 'token': {
           const tk = {
             id: `token-${++this._tokenCounter}`,
             name: `${effect.power}/${effect.toughness} Token`,
-            type: 'creature',
-            color: card.color || 'colorless',
-            mana_cost: null,
-            power: effect.power,
-            toughness: effect.toughness,
-            abilities: [],
-            description: 'Token creature.',
+            type: 'creature', color: card.color || 'colorless',
+            mana_cost: null, power: effect.power, toughness: effect.toughness,
+            abilities: [], description: 'Token creature.',
           }
           for (let n = 0; n < effect.count; n++) {
-            p.battlefield = [...p.battlefield, { card: { ...tk }, tapped: false, summoningSick: false, damage: 0 }]
+            p.battlefield = [...p.battlefield, { card: { ...tk }, tapped: false, summoningSick: true, damage: 0 }]
           }
           this._log(`${card.name} creates ${effect.count} ${effect.power}/${effect.toughness} token(s)`)
-          applied = true
           break
         }
         case 'mana': {
           p.availableMana += effect.amount
           this._log(`${card.name} adds ${effect.amount} mana (pool: ${p.availableMana})`)
-          applied = true
           break
         }
-        case 'search': {
-          // Signal to BattleScreen that player must choose a card from their library
-          p.graveyard = [...p.graveyard, card]
-          this.checkWinner()
-          return { ok: true, applied: true, needsChoice: 'search', library: [...p.library] }
+        case 'untapLands': {
+          let untapped = 0
+          for (const slot of p.lands) {
+            if (slot.tapped && untapped < effect.amount) {
+              slot.tapped = false
+              untapped++
+            }
+          }
+          p.availableMana = p.lands.filter(l => !l.tapped).length
+          if (untapped > 0) this._log(`${card.name} — untapped ${untapped} land(s) (mana: ${p.availableMana})`)
+          break
         }
         default:
-          this._log(`${card.name} resolves (no recognized effect)`)
-          applied = true
+          this._log(`${card.name} resolves (unrecognized effect: ${effect.type})`)
       }
-    } else {
-      this._log(`${card.name} resolves`)
-      applied = true
     }
 
     p.graveyard = [...p.graveyard, card]
     this.checkWinner()
-    return { ok: true, applied }
+    if (counterPending) return { ok: true, applied: true, needsChoice: 'counter' }
+
+    // Magecraft: triggers whenever CONTROLLER casts an instant or sorcery (or spell/enchantment/artifact)
+    // Each Magecraft creature on the battlefield draws 1 card for its controller
+    if (!counterPending) {
+      const magecraftSlots = p.battlefield.filter(slot =>
+        slot.card && (
+          hasAbility(slot.card, 'magecraft') ||
+          slot.card.description?.toLowerCase().includes('whenever you cast or copy an instant or sorcery')
+        )
+      )
+      for (const slot of magecraftSlots) {
+        this.drawCard(who)
+        this._log(`${slot.card.name} Magecraft — ${who} draws a card`)
+      }
+    }
+
+    return { ok: true, applied: true, ...(isSplitSecond ? { splitSecond: true } : {}) }
   }
 
   // Called after player picks a card from their library (search effect)
@@ -562,6 +665,17 @@ export class CardEngine {
     p.library = shuffle([...p.library])
     p.hand = [...p.hand, found]
     this._log(`${who} searches library and finds ${found.name}`)
+    return { ok: true }
+  }
+
+  // Called after player decides which scried cards stay on top vs go to bottom
+  completeScry(who, topCards, bottomCards) {
+    const p = this._player(who)
+    const total = topCards.length + bottomCards.length
+    const rest = p.library.slice(total)
+    p.library = [...topCards, ...rest, ...bottomCards]
+    const keptNames = topCards.map(c => c.name).join(', ')
+    this._log(`${who} scries — keeps on top: ${keptNames || 'none'}`)
     return { ok: true }
   }
 
@@ -583,10 +697,54 @@ export class CardEngine {
         for (let i = 0; i < effect.amount; i++) this.drawCard(who)
         this._log(`${card.name} ETB — ${who} draws ${effect.amount} card(s)`)
         return { ok: true }
+
       case 'lifegain':
         p.life += effect.amount
         this._log(`${card.name} ETB — ${who} gains ${effect.amount} life (life: ${p.life})`)
         return { ok: true }
+
+      case 'discard': {
+        const count = Math.min(effect.amount || 1, opp.hand.length)
+        if (count > 0) {
+          const discarded = opp.hand.slice(-count)
+          opp.hand = opp.hand.slice(0, opp.hand.length - count)
+          opp.graveyard = [...opp.graveyard, ...discarded]
+          this._log(`${card.name} ETB — ${oppName} discards ${count} card(s)`)
+        } else {
+          this._log(`${card.name} ETB — ${oppName} has no cards to discard`)
+        }
+        return { ok: true }
+      }
+
+      case 'mill': {
+        for (let i = 0; i < effect.amount; i++) {
+          const milled = opp.library.shift()
+          if (milled) opp.graveyard = [...opp.graveyard, milled]
+        }
+        this._log(`${card.name} ETB — mills ${effect.amount} from ${oppName}'s library`)
+        return { ok: true }
+      }
+
+      case 'token': {
+        const tk = {
+          id: `token-${++this._tokenCounter}`,
+          name: `${effect.power}/${effect.toughness} Token`,
+          type: 'creature', color: card.color || 'colorless',
+          mana_cost: null, power: effect.power, toughness: effect.toughness,
+          abilities: [], description: 'Token creature.',
+        }
+        for (let n = 0; n < effect.count; n++) {
+          p.battlefield = [...p.battlefield, { card: { ...tk }, tapped: false, summoningSick: true, damage: 0 }]
+        }
+        this._log(`${card.name} ETB — creates ${effect.count} ${effect.power}/${effect.toughness} token(s)`)
+        return { ok: true }
+      }
+
+      case 'mana':
+        p.availableMana += effect.amount
+        this._log(`${card.name} ETB — adds ${effect.amount} mana`)
+        return { ok: true }
+
       case 'damage':
         if (targetIdx >= 0 && targetIdx < opp.battlefield.length) {
           opp.battlefield[targetIdx].damage += effect.amount
@@ -598,28 +756,37 @@ export class CardEngine {
         }
         this.checkWinner()
         return { ok: true }
+
       case 'destroy':
       case 'exile':
-      case 'bounce':
+      case 'bounce': {
+        // Find valid (non-hexproof) targets
+        const validTargets = opp.battlefield.filter(s => !hasAbility(s.card, 'hexproof'))
         if (targetIdx >= 0 && targetIdx < opp.battlefield.length) {
           const slot = opp.battlefield[targetIdx]
-          if (effect.type === 'bounce') opp.hand = [...opp.hand, slot.card]
-          else opp.graveyard = [...opp.graveyard, slot.card]
-          opp.battlefield = opp.battlefield.filter((_, i) => i !== targetIdx)
-          this._log(`${card.name} ETB — ${effect.type}s ${slot.card.name}`)
+          if (hasAbility(slot.card, 'hexproof')) {
+            this._log(`${card.name} ETB — ${slot.card.name} has hexproof`)
+          } else {
+            if (effect.type === 'bounce') opp.hand = [...opp.hand, slot.card]
+            else opp.graveyard = [...opp.graveyard, slot.card]
+            opp.battlefield = opp.battlefield.filter((_, i) => i !== targetIdx)
+            this._log(`${card.name} ETB — ${effect.type}s ${slot.card.name}`)
+          }
           return { ok: true }
-        } else if (opp.battlefield.length > 0 && who === 'player') {
+        } else if (validTargets.length > 0 && who === 'player') {
           return { needsTarget: true, effect }
-        } else if (opp.battlefield.length > 0) {
-          // AI auto-targets first enemy creature
-          const slot = opp.battlefield[0]
+        } else if (validTargets.length > 0) {
+          const slot = validTargets[0]
+          const idx = opp.battlefield.indexOf(slot)
           if (effect.type === 'bounce') opp.hand = [...opp.hand, slot.card]
           else opp.graveyard = [...opp.graveyard, slot.card]
-          opp.battlefield = opp.battlefield.slice(1)
+          opp.battlefield = opp.battlefield.filter((_, i) => i !== idx)
           this._log(`${card.name} ETB — ${effect.type}s ${slot.card.name}`)
           return { ok: true }
         }
         return { ok: true }
+      }
+
       default:
         return { ok: true }
     }
@@ -638,6 +805,7 @@ export class CardEngine {
     const slot = p.battlefield[bfIdx]
     if (!slot) return { ok: false, error: 'No creature at that position' }
     if (slot.tapped) return { ok: false, error: `${slot.card.name} is already tapped` }
+    if (slot.summoningSick) return { ok: false, error: `${slot.card.name} is summoning sick — wait until your next turn` }
 
     const ability = parseActivatedAbility(slot.card.description)
     if (!ability) return { ok: false, error: `${slot.card.name} has no activated ability` }
@@ -786,9 +954,12 @@ export class CardEngine {
         const atkHasFirstStrike = hasAbility(attackerSlot.card, 'first strike')
 
         const defPow = blockerSlot.card.power
-        const defToughness = blockerSlot.card.toughness
         const defHasDeathtouch = hasAbility(blockerSlot.card, 'deathtouch')
         const defHasFirstStrike = hasAbility(blockerSlot.card, 'first strike')
+
+        // Effective remaining toughness — accounts for prior spell damage this turn
+        const atkEffToughness = Math.max(1, attackerSlot.card.toughness - (attackerSlot.damage || 0))
+        const defEffToughness = Math.max(1, blockerSlot.card.toughness  - (blockerSlot.damage  || 0))
 
         let attackerDied = false
         let blockerDied = false
@@ -797,12 +968,12 @@ export class CardEngine {
         // --- First Strike step ---
         if (atkHasFirstStrike && !defHasFirstStrike) {
           // Attacker hits first
-          const lethalToBlocker = atkHasDeathtouch ? 1 : defToughness
+          const lethalToBlocker = atkHasDeathtouch ? 1 : defEffToughness
           if (attackPow >= lethalToBlocker) {
             blockerDied = true
             this._log(`${blockerSlot.card.name} destroyed by first strike from ${attackerSlot.card.name}`)
-            const dmgToBlocker = atkHasDeathtouch ? 1 : Math.min(attackPow, defToughness)
-            const excess = atkHasTrample ? Math.max(0, attackPow - (atkHasDeathtouch ? 1 : defToughness)) : 0
+            const dmgToBlocker = atkHasDeathtouch ? 1 : Math.min(attackPow, defEffToughness)
+            const excess = atkHasTrample ? Math.max(0, attackPow - (atkHasDeathtouch ? 1 : defEffToughness)) : 0
             totalAtkDmgDealt = dmgToBlocker + excess
             if (excess > 0) {
               defenderPlayer.life -= excess
@@ -811,24 +982,24 @@ export class CardEngine {
           } else {
             // Blocker survives first strike, hits back
             totalAtkDmgDealt = attackPow
-            if (defHasDeathtouch || defPow >= attackerSlot.card.toughness) {
+            if (defHasDeathtouch || defPow >= atkEffToughness) {
               attackerDied = true
               this._log(`${attackerSlot.card.name} destroyed by ${blockerSlot.card.name} after first strike`)
             }
           }
         } else if (defHasFirstStrike && !atkHasFirstStrike) {
           // Defender hits first
-          if (defHasDeathtouch || defPow >= attackerSlot.card.toughness) {
+          if (defHasDeathtouch || defPow >= atkEffToughness) {
             attackerDied = true
             this._log(`${attackerSlot.card.name} destroyed by first strike from ${blockerSlot.card.name} — no damage dealt`)
           } else {
             // Attacker survives, deals damage
-            const lethalToBlocker = atkHasDeathtouch ? 1 : defToughness
+            const lethalToBlocker = atkHasDeathtouch ? 1 : defEffToughness
             if (attackPow >= lethalToBlocker) {
               blockerDied = true
             }
-            const dmgToBlocker = atkHasDeathtouch ? 1 : Math.min(attackPow, defToughness)
-            const excess = atkHasTrample ? Math.max(0, attackPow - (atkHasDeathtouch ? 1 : defToughness)) : 0
+            const dmgToBlocker = atkHasDeathtouch ? 1 : Math.min(attackPow, defEffToughness)
+            const excess = atkHasTrample ? Math.max(0, attackPow - (atkHasDeathtouch ? 1 : defEffToughness)) : 0
             totalAtkDmgDealt = dmgToBlocker + excess
             if (excess > 0) {
               defenderPlayer.life -= excess
@@ -837,15 +1008,15 @@ export class CardEngine {
           }
         } else {
           // Simultaneous damage (both have or neither has first strike)
-          const lethalToBlocker = atkHasDeathtouch ? 1 : defToughness
+          const lethalToBlocker = atkHasDeathtouch ? 1 : defEffToughness
           if (attackPow >= lethalToBlocker) {
             blockerDied = true
           }
-          if (defHasDeathtouch || defPow >= attackerSlot.card.toughness) {
+          if (defHasDeathtouch || defPow >= atkEffToughness) {
             attackerDied = true
           }
-          const dmgToBlocker = atkHasDeathtouch ? 1 : Math.min(attackPow, defToughness)
-          const excess = atkHasTrample ? Math.max(0, attackPow - (atkHasDeathtouch ? 1 : defToughness)) : 0
+          const dmgToBlocker = atkHasDeathtouch ? 1 : Math.min(attackPow, defEffToughness)
+          const excess = atkHasTrample ? Math.max(0, attackPow - (atkHasDeathtouch ? 1 : defEffToughness)) : 0
           totalAtkDmgDealt = dmgToBlocker + excess
           if (excess > 0) {
             defenderPlayer.life -= excess
@@ -883,9 +1054,13 @@ export class CardEngine {
       }
     }  // end for-each attacker
 
+    // Remove null slots left by combat deaths (card set to null above)
+    attackerPlayer.battlefield = attackerPlayer.battlefield.filter(s => s.card !== null)
+    defenderPlayer.battlefield = defenderPlayer.battlefield.filter(s => s.card !== null)
+
     this.state.attackers = []
     this.state.blockers  = {}
-    this.state.phase = 'main2'  // Main Phase 2 — can play more cards after combat
+    this.state.phase = 'main'   // Return to main phase after combat
 
     this.checkWinner()
     return { ok: true, lifelinkHeals }
@@ -895,6 +1070,7 @@ export class CardEngine {
     const p = this._player(who)
     const alive = []
     for (const slot of p.battlefield) {
+      if (!slot.card) continue
       if (slot.damage >= slot.card.toughness) {
         p.graveyard = [...p.graveyard, slot.card]
         this._log(`${slot.card.name} is destroyed (${slot.damage} damage / ${slot.card.toughness} toughness)`)
@@ -927,7 +1103,7 @@ export class CardEngine {
     this._tempBuffs = this._tempBuffs.filter(b => b.who !== who)
     const p = this._player(who)
     for (const buff of remove) {
-      const slot = p.battlefield[buff.bfIndex]
+      const slot = p.battlefield.find(s => s.card && s.card.id === buff.cardId)
       if (slot) {
         slot.card = {
           ...slot.card,

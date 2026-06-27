@@ -188,3 +188,31 @@ ALTER TABLE public.purchases ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "purchases: own" ON public.purchases;
 CREATE POLICY "purchases: own" ON public.purchases
   USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+-- Cards owned by each player (populated from starter pick + booster packs)
+CREATE TABLE IF NOT EXISTS public.player_cards (
+  id        uuid    PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id   uuid    NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  card_id   uuid    NOT NULL REFERENCES public.cards(id) ON DELETE CASCADE,
+  quantity  integer NOT NULL DEFAULT 1 CHECK (quantity >= 1),
+  UNIQUE (user_id, card_id)
+);
+ALTER TABLE public.player_cards ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "player_cards: own" ON public.player_cards;
+CREATE POLICY "player_cards: own" ON public.player_cards
+  USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+-- All gold and HP change events (battles, shop, caretaker rest)
+CREATE TABLE IF NOT EXISTS public.transactions (
+  id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     uuid        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  event_type  text        NOT NULL,
+  gold_delta  integer     NOT NULL DEFAULT 0,
+  hp_delta    integer     NOT NULL DEFAULT 0,
+  description text,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "transactions: own" ON public.transactions;
+CREATE POLICY "transactions: own" ON public.transactions
+  USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);

@@ -671,6 +671,154 @@ function ResultOverlay({ winner, reward, npcName, onContinue, onRematch, onRetre
   )
 }
 
+// ── Scry Modal ───────────────────────────────────────────────────────────────
+function ScryModal({ scryCards, onConfirm }) {
+  const [bottomSet, setBottomSet] = useState(new Set())
+
+  function toggleBottom(idx) {
+    setBottomSet(prev => {
+      const next = new Set(prev)
+      next.has(idx) ? next.delete(idx) : next.add(idx)
+      return next
+    })
+  }
+
+  function handleConfirm() {
+    const topCards    = scryCards.filter((_, i) => !bottomSet.has(i))
+    const bottomCards = scryCards.filter((_, i) =>  bottomSet.has(i))
+    onConfirm(topCards, bottomCards)
+  }
+
+  return (
+    <div style={{
+      position: 'absolute', inset: 0,
+      background: 'rgba(4,8,16,0.97)',
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      zIndex: 300, fontFamily: "'Courier New', monospace",
+    }}>
+      {/* Header */}
+      <div style={{
+        width: '100%', background: '#0A1828',
+        borderBottom: '2px solid #4A80C8',
+        padding: '8px 16px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <span style={{ fontFamily: "'Cinzel',serif", fontSize: '1rem', color: '#88BBFF', fontWeight: 900, letterSpacing: '0.1em' }}>
+          ✦ SCRY {scryCards.length} ✦
+        </span>
+        <span style={{ fontSize: '0.6rem', color: '#4A6888' }}>
+          Top {scryCards.length} card{scryCards.length !== 1 ? 's' : ''} of your library
+        </span>
+      </div>
+
+      <div style={{ fontSize: '0.6rem', color: '#4A6888', padding: '8px 16px 4px', textAlign: 'center' }}>
+        Click a card to send it to the <span style={{ color: '#CC6644' }}>bottom</span>. Unmarked cards stay on <span style={{ color: '#88BBFF' }}>top</span> in this order.
+      </div>
+
+      {/* Cards */}
+      <div style={{
+        flex: 1, overflowY: 'auto', width: '100%', maxWidth: 680,
+        padding: '8px 16px',
+        display: 'flex', flexDirection: 'column', gap: 5,
+      }}>
+        {scryCards.length === 0 && (
+          <div style={{ color: '#506880', fontSize: '0.75rem', textAlign: 'center', marginTop: 24 }}>
+            — Library is empty —
+          </div>
+        )}
+        {scryCards.map((card, i) => {
+          const toBottom = bottomSet.has(i)
+          const color = card.color || 'colorless'
+          const frame = CARD_FRAME[color] || CARD_FRAME.colorless
+          const isCreature = card.type === 'creature'
+          return (
+            <div
+              key={`scry-${i}`}
+              onClick={() => toggleBottom(i)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                background: toBottom
+                  ? 'rgba(120,40,20,0.35)'
+                  : `linear-gradient(90deg, ${frame.bg}22, transparent)`,
+                border: `1px solid ${toBottom ? '#CC664488' : frame.border + '44'}`,
+                borderLeft: `3px solid ${toBottom ? '#CC6644' : '#88BBFF'}`,
+                borderRadius: 3,
+                padding: '6px 10px',
+                cursor: 'pointer',
+                opacity: toBottom ? 0.7 : 1,
+              }}
+            >
+              {/* Position label */}
+              <div style={{
+                flexShrink: 0, width: 28, textAlign: 'center',
+                fontSize: '0.55rem', fontWeight: 700,
+                color: toBottom ? '#CC6644' : '#88BBFF',
+              }}>
+                {toBottom ? '↓ BOT' : `↑ #${i + 1}`}
+              </div>
+
+              {/* Color swatch */}
+              <div style={{ width: 8, height: 40, background: frame.header, borderRadius: 2, flexShrink: 0 }} />
+
+              {/* Card info */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: "'Cinzel',serif", fontSize: '0.72rem', fontWeight: 700, color: '#E8E0C8' }}>
+                  {card.name}
+                </div>
+                <div style={{ fontSize: '0.55rem', color: '#7090B0', textTransform: 'uppercase', letterSpacing: 1 }}>
+                  {card.type}{card.rarity ? ` · ${card.rarity}` : ''}
+                  {isCreature && card.power != null ? ` · ${card.power}/${card.toughness}` : ''}
+                </div>
+                {card.description && (
+                  <div style={{ fontSize: '0.5rem', color: '#A09880', fontStyle: 'italic', marginTop: 2 }}>
+                    {card.description.slice(0, 90)}{card.description.length > 90 ? '…' : ''}
+                  </div>
+                )}
+              </div>
+
+              {/* Mana cost */}
+              {card.type !== 'land' && (
+                <div style={{
+                  minWidth: 24, height: 24, borderRadius: '50%',
+                  background: frame.header, border: `1.5px solid ${frame.border}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '0.65rem', fontWeight: 'bold', color: frame.headerText, flexShrink: 0,
+                }}>
+                  {getManaCost(card)}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Summary + confirm */}
+      <div style={{
+        width: '100%', padding: '10px 16px',
+        background: '#0A1828', borderTop: '1px solid rgba(72,128,200,0.3)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <div style={{ fontSize: '0.6rem', color: '#4A6888' }}>
+          <span style={{ color: '#88BBFF' }}>{scryCards.length - bottomSet.size} on top</span>
+          {bottomSet.size > 0 && <span style={{ color: '#CC6644' }}> · {bottomSet.size} to bottom</span>}
+        </div>
+        <button
+          onClick={handleConfirm}
+          style={{
+            padding: '6px 20px',
+            background: '#1A3A70', border: '1px solid #4A80C8',
+            color: '#88BBFF', cursor: 'pointer',
+            fontFamily: "'Cinzel',serif", fontSize: '0.75rem',
+            letterSpacing: '0.08em', fontWeight: 700,
+          }}
+        >
+          Confirm
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── Search / Wish Modal ──────────────────────────────────────────────────────
 function SearchModal({ library, wishCards, onPickLibrary, onPickWish, onSkip }) {
   const [tab, setTab] = useState('library')
@@ -834,6 +982,7 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
   const [message, setMessage] = useState('')
   const [hoveredCard, setHoveredCard] = useState(null) // { card, rect }
   const [searchModal, setSearchModal] = useState(null) // { library, wishCards }
+  const [scryModal, setScryModal]     = useState(null) // { scryCards, amount }
   const [instantWindow, setInstantWindow] = useState(false)
   const [pendingETB, setPendingETB] = useState(null) // { card, effect }
   const [pendingAiActions, setPendingAiActions] = useState(null) // { actions, nextIdx }
@@ -841,6 +990,8 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
   const healPopIdRef = useRef(0)
   const [newCardAnimIdx, setNewCardAnimIdx] = useState(null)
   const [muted, setMuted] = useState(false)
+  const [splitSecondFlash, setSplitSecondFlash] = useState(false)
+  const [scoopConfirm, setScoopConfirm] = useState(false)
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -892,13 +1043,13 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
     if (aiThinking) return
     const card = gameState.player.hand[i]
     if (!card) return
-    // During instant window: allow instants and flash creatures
+    // During instant window: allow instants, spells (Scryfall 320 cards), and flash creatures
     if (instantWindow) {
       const isFlash = card.type === 'creature' && card.abilities?.includes('flash')
-      if (card.type !== 'instant' && !isFlash) return showMessage('You can only cast instants or Flash creatures right now — or press PASS')
+      if (card.type !== 'instant' && card.type !== 'spell' && !isFlash) return showMessage('You can only cast instants or Flash creatures right now — or press PASS')
     } else {
       if (gameState.activePlayer !== 'player') return
-      if ((gameState.phase !== 'main' && gameState.phase !== 'main2')) return
+      if (gameState.phase !== 'main') return
     }
 
     if (selectedHandIdx === i) {
@@ -983,6 +1134,11 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
     setSelectedHandIdx(null)
     setSelectedBfIdx(null)
 
+    if (result.needsChoice === 'scry') {
+      setScryModal({ scryCards: result.scryCards, amount: result.amount })
+      return
+    }
+
     if (result.needsChoice === 'search') {
       // Build wish cards: unique cards from the player's original deck
       const seen = new Set()
@@ -995,17 +1151,36 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
       return
     }
 
-    // Counter spell cast in response to a pending AI action → cancel that action
-    const isCounter = card.description?.toLowerCase().includes('counter target')
-    if (instantWindow && pendingAiActions !== null && isCounter) {
-      const { actions, nextIdx } = pendingAiActions
-      const pendingAction = actions[nextIdx]
-      engineRef.current._log(`Counter spell cancels AI's ${pendingAction?.type === 'castCreature' ? 'creature' : 'spell'}!`)
-      setPendingAiActions(null)
+    if (result.needsChoice === 'counter') {
+      if (instantWindow && pendingAiActions !== null) {
+        // Cancel the AI's pending spell/creature — counter resolves
+        const { actions, nextIdx } = pendingAiActions
+        const pendingAction = actions[nextIdx]
+        engineRef.current._log(`Counter spell cancels AI's ${pendingAction?.type === 'castCreature' ? 'creature' : 'spell'}!`)
+        setPendingAiActions(null)
+        setInstantWindow(false)
+        syncState()
+        setAiThinking(true)
+        executeAiActions(actions, nextIdx + 1)
+        return
+      } else {
+        // No spell on the stack to counter — spell fizzles
+        engineRef.current._log(`Counter spell — no spell on the stack to counter`)
+      }
+    }
+
+    // Split second: spell resolved, no one can respond — close instant window immediately
+    if (result.splitSecond) {
+      setSplitSecondFlash(true)
+      setTimeout(() => setSplitSecondFlash(false), 1800)
       setInstantWindow(false)
       syncState()
-      setAiThinking(true)
-      executeAiActions(actions, nextIdx + 1)
+      if (pendingAiActions !== null) {
+        const { actions, nextIdx } = pendingAiActions
+        setPendingAiActions(null)
+        setAiThinking(true)
+        executeAiActions(actions, nextIdx, true) // playerPassedPriority: skip re-opening instant window
+      }
       return
     }
 
@@ -1015,7 +1190,7 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
   function handlePlayerBfClick(i) {
     if (!gameState || aiThinking) return
 
-    if ((gameState.phase === 'main' || gameState.phase === 'main2') && selectedHandIdx !== null) {
+    if ((gameState.phase === 'main') && selectedHandIdx !== null) {
       const card = gameState.player.hand[selectedHandIdx]
       if (card && (card.type === 'instant' || card.type === 'sorcery' || card.type === 'spell')) {
         handleCastSpell('own_creature', i)
@@ -1034,7 +1209,7 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
     }
 
     // Tap to activate ability: main phase, player's turn, no spell selected, not selecting attackers
-    if ((gameState.phase === 'main' || gameState.phase === 'main2') && gameState.activePlayer === 'player' && selectedHandIdx === null && !selectingAttackers) {
+    if ((gameState.phase === 'main') && gameState.activePlayer === 'player' && selectedHandIdx === null && !selectingAttackers) {
       const result = engineRef.current.activateAbility('player', i)
       if (result.ok) {
         syncState()
@@ -1074,11 +1249,12 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
       if (!isAttacker) {
         return showMessage('Click one of the attacking creatures to assign your blocker')
       }
-      // Reach check: flying attackers can only be blocked by flying or reach creatures
+      // Flying check: flying attackers can only be blocked by flying or reach creatures
       const attacker = gameState.ai.battlefield[i]
       const blocker  = gameState.player.battlefield[pendingBlockerSrcIdx]
-      if (attacker && blocker && attacker.card.abilities?.includes('flying')) {
-        const canBlock = blocker.card.abilities?.includes('flying') || blocker.card.abilities?.includes('reach')
+      const hasAbNorm = (card, ab) => card?.abilities?.some(a => a.toLowerCase().replace(/[\s_]/g,'') === ab)
+      if (attacker && blocker && hasAbNorm(attacker.card, 'flying')) {
+        const canBlock = hasAbNorm(blocker.card, 'flying') || hasAbNorm(blocker.card, 'reach')
         if (!canBlock) return showMessage(`${blocker.card.name} can't block ${attacker.card.name} — needs Flying or Reach`)
       }
       setAssignedBlockers(prev => {
@@ -1093,7 +1269,7 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
       return
     }
 
-    const isMain = (gameState.phase === 'main' || gameState.phase === 'main2') && gameState.activePlayer === 'player'
+    const isMain = (gameState.phase === 'main') && gameState.activePlayer === 'player'
     if (!isMain && !instantWindow) return
     if (selectedHandIdx === null) return
 
@@ -1103,7 +1279,7 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
   }
 
   function handleStartAttack() {
-    if (!gameState || (gameState.phase !== 'main' && gameState.phase !== 'main2')) return
+    if (!gameState || gameState.phase !== 'main') return
     if (gameState.activePlayer !== 'player') return
     setSelectingAttackers(true)
     setPendingAttackers([])
@@ -1213,10 +1389,20 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
 
     const action = actions[idx]
 
+    // Check if AI is casting a split-second spell — player cannot respond to split second
+    const aiSplitSecond = action.type === 'castSpell' &&
+      engineRef.current.state.ai.hand.find(c => c.id === action.cardId)?.abilities?.includes('split_second')
+
+    if (aiSplitSecond) {
+      setSplitSecondFlash(true)
+      setTimeout(() => setSplitSecondFlash(false), 1800)
+    }
+
     // Before AI spell/creature: give player a respond window if they have instants
-    if (!playerPassedPriority &&
+    // (skipped entirely if AI is casting split second — split second cannot be responded to)
+    if (!playerPassedPriority && !aiSplitSecond &&
         (action.type === 'castSpell' || action.type === 'castCreature') &&
-        engineRef.current.state.player.hand.some(c => c.type === 'instant' || (c.type === 'creature' && c.abilities?.includes('flash')))) {
+        engineRef.current.state.player.hand.some(c => c.type === 'instant' || c.type === 'spell' || (c.type === 'creature' && c.abilities?.includes('flash')))) {
       setPendingAiActions({ actions, nextIdx: idx })
       setAiThinking(false)
       setInstantWindow(true)
@@ -1401,6 +1587,47 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
       {/* Hover tooltip — rendered at fixed position above everything */}
       {hoveredCard && (
         <CardTooltip card={hoveredCard.card} rect={hoveredCard.rect} />
+      )}
+
+      {/* Split-second flash overlay */}
+      {splitSecondFlash && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 9999, pointerEvents: 'none',
+        }}>
+          <div style={{
+            background: 'linear-gradient(135deg, #1a0a30 0%, #2d1060 100%)',
+            border: '2px solid #9933ff',
+            color: '#cc88ff',
+            fontFamily: 'monospace',
+            fontSize: '1.5rem',
+            fontWeight: 'bold',
+            padding: '1rem 2.5rem',
+            borderRadius: '10px',
+            textAlign: 'center',
+            boxShadow: '0 0 32px #9933ff, 0 0 64px #6611bb',
+            letterSpacing: '0.08em',
+          }}>
+            ⚡ SPLIT SECOND
+            <div style={{ fontSize: '0.85rem', color: '#aa77cc', fontWeight: 'normal', marginTop: '0.3rem' }}>
+              Cannot be responded to — resolves immediately
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Scry modal */}
+      {scryModal && (
+        <ScryModal
+          scryCards={scryModal.scryCards}
+          amount={scryModal.amount}
+          onConfirm={(topCards, bottomCards) => {
+            engineRef.current.completeScry('player', topCards, bottomCards)
+            setScryModal(null)
+            syncState()
+          }}
+        />
       )}
 
       {/* Search / wish modal */}
@@ -1760,11 +1987,11 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
 
               <button
                 className="btn-ghost"
-                disabled={(!isPlayerTurn && !instantWindow) || selectedHandIdx === null || !selectedCard || (selectedCard.type !== 'instant' && selectedCard.type !== 'sorcery' && selectedCard.type !== 'spell') || !canCast}
+                disabled={(!isPlayerTurn && !instantWindow) || selectedHandIdx === null || !selectedCard || !['instant','sorcery','spell','enchantment','artifact'].includes(selectedCard.type) || !canCast}
                 title={
                   !isPlayerTurn ? 'Not your turn'
                   : !selectedCard ? 'Select a spell from your hand'
-                  : (selectedCard.type !== 'instant' && selectedCard.type !== 'sorcery' && selectedCard.type !== 'spell') ? 'Select an instant, sorcery, or spell card'
+                  : !['instant','sorcery','spell','enchantment','artifact'].includes(selectedCard.type) ? 'Select an instant, sorcery, enchantment, or artifact card'
                   : !canCast ? `Costs ${selectedCardCost} mana — you have ${player.availableMana} (play more lands)`
                   : `Cast ${selectedCard.name}`
                 }
@@ -1781,7 +2008,7 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
                               color: pendingAiActions ? '#FFCC44' : '#88CCFF',
                               letterSpacing: 1, maxWidth: 180 }}>
                   {pendingAiActions
-                    ? `AI about to ${pendingAiActions.actions[pendingAiActions.nextIdx]?.type === 'castSpell' ? 'cast a spell' : 'play a creature'} — respond or PASS`
+                    ? `AI about to cast a ${pendingAiActions.actions[pendingAiActions.nextIdx]?.type === 'castCreature' ? 'creature spell' : 'spell'} — counter or PASS`
                     : "Opponent's turn ended — cast instants or PASS"
                   }
                 </div>
@@ -1823,6 +2050,25 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
                   style={{ fontSize: '0.75rem', padding: '4px 10px' }}
                 >
                   End Turn
+                </button>
+
+                <button
+                  className="btn-ghost"
+                  onClick={() => {
+                    if (scoopConfirm) {
+                      onBattleEnd({ winner: 'ai', reward: 0, hpDamage: 1 })
+                    } else {
+                      setScoopConfirm(true)
+                      setTimeout(() => setScoopConfirm(false), 3000)
+                    }
+                  }}
+                  style={{
+                    fontSize: '0.7rem', padding: '4px 8px',
+                    color: scoopConfirm ? '#FF6644' : '#607090',
+                    borderColor: scoopConfirm ? '#FF6644' : '#405060',
+                  }}
+                >
+                  {scoopConfirm ? 'Confirm?' : 'Scoop'}
                 </button>
 
                 {pendingETB && (

@@ -703,7 +703,7 @@ function DeckItem({ deck, isSelected, onSelect, onDelete }) {
 }
 
 // ── Main page ───────────────────────────────────────────────
-export default function Home({ onClose }) {
+export default function Home({ onClose, collectionVersion = 0 }) {
   const { user, signOut }           = useAuth()
   const navigate                    = useNavigate()
   const [decks, setDecks]           = useState([])
@@ -741,6 +741,7 @@ export default function Home({ onClose }) {
   }, [])
 
   useEffect(() => { if (user) { fetchDecks(); fetchAllCards() } }, [user])
+  useEffect(() => { if (user && collectionVersion > 0) fetchAllCards() }, [collectionVersion])
 
   async function fetchDecks() {
     setLdDecks(true)
@@ -754,8 +755,16 @@ export default function Home({ onClose }) {
   async function fetchAllCards() {
     setLdCards(true)
     try {
-      const res = await api.get('/cards?order=color.asc,name.asc')
-      setAllCards(res.data)
+      const [ownedRes, cardsRes] = await Promise.all([
+        api.get(`/player_cards?user_id=eq.${user.id}&select=card_id,quantity`),
+        api.get('/cards?order=color.asc,name.asc'),
+      ])
+      const ownedMap = {}
+      for (const row of ownedRes.data || []) ownedMap[row.card_id] = row.quantity
+      // Always show all cards — _owned is a display badge only, not a filter
+      setAllCards((cardsRes.data || []).map(c => ({ ...c, _owned: ownedMap[c.id] ?? 0 })))
+    } catch (err) {
+      console.error('fetchAllCards failed:', err)
     } finally { setLdCards(false) }
   }
 
@@ -927,11 +936,7 @@ export default function Home({ onClose }) {
           fontFamily: "'Cinzel',serif", color: '#D4AF37',
           fontSize: 'clamp(0.6rem,1vw,0.85rem)', letterSpacing: '0.12em', fontWeight: 900,
         }}>DECK BUILDER</span>
-        <div style={{ display: 'flex', gap: '0.45rem', alignItems: 'center' }}>
-          <span style={{ color: '#7090B0', fontSize: '0.68rem', fontFamily: "'Courier New',monospace" }}>{user?.email}</span>
-          <button style={smBtn('#D4AF37')} onClick={() => onClose ? onClose() : navigate('/game')}>Enter World</button>
-          <button style={smBtn('#7090B0')} onClick={signOut}>Logout</button>
-        </div>
+        <span style={{ color: '#7090B0', fontSize: '0.68rem', fontFamily: "'Courier New',monospace" }}>{user?.email}</span>
       </div>
 
       {/* ── MY DECKS horizontal bar ── */}
@@ -981,8 +986,10 @@ export default function Home({ onClose }) {
               fontFamily: "'Courier New',monospace",
             }}>
               <input placeholder="Deck name *" value={newName} onChange={e => setNewName(e.target.value)}
+                onKeyDown={e => e.stopPropagation()}
                 style={{ ...inpStyle, fontSize: '0.65rem', padding: '0.2rem 0.35rem' }} />
               <input placeholder="Description" value={newDesc} onChange={e => setNewDesc(e.target.value)}
+                onKeyDown={e => e.stopPropagation()}
                 style={{ ...inpStyle, fontSize: '0.6rem', padding: '0.18rem 0.35rem' }} />
               <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
                 {['white','blue','black','red','green','colorless'].map(c => (
@@ -1077,6 +1084,7 @@ export default function Home({ onClose }) {
             </div>
             <input
               placeholder="Search cards…" value={search} onChange={e => setSearch(e.target.value)}
+              onKeyDown={e => e.stopPropagation()}
               style={{
                 width: '100%', padding: '0.15rem 0.4rem', boxSizing: 'border-box',
                 background: 'rgba(6,12,24,0.9)', border: '1px solid rgba(90,120,160,0.35)',

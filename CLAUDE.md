@@ -29,10 +29,12 @@ Running `npm install` from Windows and WSL installs different native Rollup bina
 ## Supabase
 - URL + anon key are in `.env` (gitignored — never commit)
 - `.env.example` exists at project root with placeholder values — safe to commit
-- Tables: `users`, `cards` (320 Scryfall cards, read-only), `decks`, `deck_cards`, `player_profiles`, `shop_listings`, `purchases`
+- Tables: `users`, `cards` (320 Scryfall cards, read-only), `decks`, `deck_cards`, `player_profiles`, `player_cards`, `shop_listings`, `purchases`, `transactions`
 - RLS: users can only see/edit their own decks, profiles, and purchases
 - `deck_cards.quantity` constraint: `>= 1` (no upper limit — basic lands are unlimited)
+- `player_cards`: tracks owned card quantities per user — `UNIQUE (user_id, card_id)`; deployed 2026-06-26
 - Schema file: `supabase/schema.sql` — run in Supabase SQL editor to deploy
+- **CRITICAL**: If you get a 404 on any `/rest/v1/<table>` call, the table doesn't exist in Supabase — run the CREATE TABLE from schema.sql in the SQL editor
 
 ## Phaser Scene Flow
 ```
@@ -215,16 +217,14 @@ When fetched via API it arrives as a JS object — `getManaCost()` sums all valu
 - Clicking locked region: `showLockMessage(neededColor)` — 2.2s timed overlay, "Earn the WHITE seal first!"
 - Re-checks registry live so unlocks immediately after winning
 
-## UI — Login Screen (LOCKED 2026-06-23)
-- Background: `public/assets/login-bg.png` — the pixel art mockup (`mana_tactics_login_screen.png`)
+## UI — Login Screen (2026-06-26)
+- Background: `public/assets/login-bg.png` — original pixel art scene (MANA TACTICS title, academy courtyard, guild banners)
+- The original image had a pixel art login panel baked in; it was blanked with Python/Pillow (`rgb(8,5,16)` rect at x=34–70%, y=31–78%)
+- React panel sits exactly over the blanked area: `position:absolute, left:34%, top:31%, width:36%, height:47%`
+- Panel background: `rgb(8,5,16)` fully opaque — matches the painted blank area
 - `backgroundSize: '100% 100%'` — do NOT change to `cover`, it breaks % positioning
-- Input box masks the drawn "PLAYER NAME" text: `position:absolute, left:44%, top:39.5%, width:22.5%, height:12.5%`
-- Box fill: `rgb(11,17,33)` — matches the mockup panel color
-- Two inputs (email + password), no labels, placeholder text only
-- CONTINUE hit-area: `position:fixed, left:30%, top:56%, width:41%, height:8%` — transparent, submits form
-- NEW GAME hit-area: `position:absolute, left:30%, top:64.5%, width:41%, height:7.5%` — Link to /register
-- All Login.jsx changes must be written via `C:\Users\Kenny\write_login.py` run through PowerShell
-  (WSL file writes don't trigger Vite's Windows watcher)
+- To reposition: adjust BOTH the Python rect coordinates AND the Login.jsx panel percentages together
+- All Login.jsx edits can be done directly in WSL — Kenny restarts `npm run dev` from Windows cmd after
 
 ## UI — Register Screen (LOCKED 2026-06-23)
 - Same `login-bg.png` full-screen background as login
@@ -253,6 +253,16 @@ All source file edits go through Windows Python to trigger Vite's watcher:
 powershell.exe -Command "python 'C:\Users\Kenny\write_login.py'"
 ```
 Scripts live at `C:\Users\Kenny\write_*.py`
+
+## Card Collection System (2026-06-26)
+- `player_cards` table: `(user_id, card_id, quantity)` — tracks what each player owns
+- **Deck builder shows ALL 320 cards always** — `_owned` field is a display badge (quantity owned), NOT a filter
+- Cards with `_owned: 0` show without a badge; owned cards show their quantity count
+- `fetchAllCards()` in `Home.jsx`: parallel fetch of `player_cards` + `cards`, merge via `ownedMap`, set all cards with `_owned`
+- `handleBuyPack()` in `GamePage.jsx`: card fetch → gold deduct → purchases log (fire-and-forget) → Supabase JS upsert to `player_cards` → `setCollectionVersion` (always fires via finally)
+- `handleStarterPicked()`: seeds `player_cards` via Supabase JS client upsert with `onConflict: 'user_id,card_id'`
+- **Always use Supabase JS client for `player_cards` writes** — axios default `Prefer: return=representation` header conflicts with upsert resolution; Supabase client handles it internally
+- Prize pack (archmage win): same Supabase JS upsert pattern as booster pack
 
 ## Deck Builder (Home.jsx) — 5-Panel Layout (2026-06-24)
 - **Outer frame**: warm dark wood `#3B2A1A`, gold corner rivets, gold border `#C8961E`
@@ -302,7 +312,14 @@ Scripts live at `C:\Users\Kenny\write_*.py`
 - Login auth guard — Supabase persists session in localStorage so authenticated users saw the login form on every revisit; added `if (!loading && user) return <Navigate to="/game" replace />` in Login.jsx
 - Refresh-to-intro — refreshing while in-game replayed the TitleScene "press any key" intro; BootScene now checks `localStorage.getItem('mt_starter')` and routes returning players directly to HubScene
 - Triad decks missing — SanctumScene fell back to single-color decks; added `triad-tasklet` (Blue/Black control), `triad-gemini` (White/Blue/Green value), `triad-claude` (Red/Black/Green toolbox) to `aiDecks.js` with 25 new multi-color cards (2026-06-26)
-- **KNOWN BUG (unfixed)**: `Login.jsx` calls `SoundEngine.playSFX('confirm')` etc. — wrapper doesn't exist; throws on login submit. Fix: replace all `playSFX(name)` calls with direct method calls e.g. `SoundEngine.confirm()`
+- `Login.jsx` had `SoundEngine.playSFX('confirm')` etc. — replaced all 6 calls with direct method calls (`SoundEngine.confirm()`, `SoundEngine.error()`, `SoundEngine.openMenu()`, `SoundEngine.closeMenu()`) — login now works (2026-06-26)
+- `BootScene.create()` always started TitleScene — added `mt_starter` check so returning players go directly to Hub (2026-06-26)
+- `HubScene` rewritten to use `IsoEngine.js` + `academy-tileset-v1.png` sprites; duplicate `drawFountain()` removed; fountain uses tileset sprite with pulsing glow; desks/bookshelves/plants/lanterns use tileset sprites; floor drawn with Graphics (warm stone checkerboard); `drawPortalDoor()` now explicitly called in `create()` (was only baked into hub-bg.png before) (2026-06-26)
+- Login double-vision fixed — Python/Pillow blanked the baked-in pixel art panel from `login-bg.png`; React panel positioned over it at `left:34%, top:31%, width:36%, height:47%` (2026-06-26)
+- `player_cards` table was never deployed to Supabase → 404 on all collection reads/writes; table created manually in SQL editor (2026-06-26)
+- Booster pack collection save: moved from axios (broken `Prefer` header) to Supabase JS client; purchases log made fire-and-forget; `collectionVersion` increment moved to `finally` so deck builder always refreshes (2026-06-26)
+- `fetchAllCards` now shows all 320 cards always with `_owned` badge — previous filter-by-ownership caused invisible cards whenever `player_cards` had any rows but IDs didn't match (2026-06-26)
+- `handleStarterPicked` player_cards upsert switched to Supabase JS client for consistency (2026-06-26)
 
 ## Postgame — The Legendary Alumni (The Triad)
 Unlocks after player collects all 5 Archmage Seals. Full spec in `docs/Mana_Tactics_Legendary_Alumni_Handoff.md`.
@@ -321,8 +338,10 @@ Unlocks after player collects all 5 Archmage Seals. Full spec in `docs/Mana_Tact
 > ✅ Legendary Alumni (The Triad) — decks, sprites, scene, gate logic all complete (2026-06-26).
 > ✅ Visual overhaul — real artwork sprites, tight-crop, scaling fixed, 2.5D backgrounds verified.
 
-1. **Login.jsx SoundEngine bug** — `playSFX()` wrapper doesn't exist; replace all calls with direct methods (`SoundEngine.confirm()` etc.) — login currently throws on submit
-2. **Battle system polish** (most gameplay-visible)
+1. ✅ **Login.jsx SoundEngine bug** — fixed (2026-06-26)
+2. ✅ **Login double-vision** — pixel art panel blanked, React panel positioned over it (2026-06-26)
+3. ✅ **Booster pack collection** — player_cards table deployed, Supabase JS upsert, always-refresh (2026-06-26)
+4. **Battle system polish** (most gameplay-visible)
    - Card play animations (creature lands on field, spell cast flash)
    - Death state when HP hits 0; win/lose screen improvements
    - Better AI difficulty scaling per region

@@ -391,6 +391,7 @@ class ClubScene extends Phaser.Scene {
   // ── Input ──────────────────────────────────────────────────────────────────
 
   setupInput() {
+    this.input.keyboard.disableGlobalCapture()
     this.cursors = this.input.keyboard.createCursorKeys()
     this.wasd = this.input.keyboard.addKeys({
       up:    Phaser.Input.Keyboard.KeyCodes.W,

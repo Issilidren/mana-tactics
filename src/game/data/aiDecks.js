@@ -78,7 +78,7 @@ const CARDS = {
     power: null,
     toughness: null,
     rarity: 'common',
-    description: 'Counter target spell. Discard a card from opponent\'s hand.',
+    description: 'Counter target spell.',
     abilities: ['counter'],
   },
   brainstorm: {
@@ -90,7 +90,7 @@ const CARDS = {
     power: null,
     toughness: null,
     rarity: 'common',
-    description: 'Draw 3 cards.',
+    description: 'Draw 3 cards, then put 2 cards from your hand on top of your library.',
     abilities: ['draw'],
   },
   sengir_vampire: {
@@ -186,8 +186,8 @@ const CARDS = {
     power: 1,
     toughness: 1,
     rarity: 'common',
-    description: 'Add 1 green mana to your pool each turn.',
-    abilities: ['mana_dork'],
+    description: 'Tap: Add 1 mana.',
+    abilities: [],
   },
   giant_growth: {
     id: CARD_IDS.giant_growth,
@@ -349,6 +349,25 @@ const TRIAD_CARDS = {
     description: 'Deal 2 damage to any target. Target player discards 1 card.',
     abilities: ['damage'],
   },
+  // ── Split-second cards ────────────────────────────────────────────────────
+  // Split second: while this spell is on the stack, players cannot cast spells
+  // or activate non-mana abilities. Cannot be countered. Resolves immediately.
+  sudden_shock: {
+    id: 'triad-0030', name: 'Sudden Shock',
+    type: 'instant', color: 'red',
+    mana_cost: { red: 1, colorless: 1 },
+    power: null, toughness: null, rarity: 'uncommon',
+    description: 'Split second. Deal 2 damage to any target.',
+    abilities: ['split_second'],
+  },
+  stonewood_invocation: {
+    id: 'triad-0031', name: 'Stonewood Invocation',
+    type: 'instant', color: 'green',
+    mana_cost: { green: 1, colorless: 4 },
+    power: null, toughness: null, rarity: 'uncommon',
+    description: 'Split second. Target creature gets +5/+5 until end of turn.',
+    abilities: ['split_second'],
+  },
 }
 
 // Helper: build deck entry with quantity
@@ -386,66 +405,53 @@ export const AI_DECKS = {
     ],
   },
 
-  // White — lifegain, flyers, protection
+  // White — lifegain, flyers, protection (strictly mono-white)
   white: {
     color: 'white',
     cards: [
-      qty('white_knight', 4),
+      qty('white_knight', 6),
       qty('serra_angel', 4),
-      qty('archangel', 2),
-      qty('giant_growth', 4),  // pump spells double as combat tricks
-      qty('lightning_bolt', 2), // splash red for removal
-      qty('llanowar_elves', 4),
+      qty('archangel', 3),
     ],
   },
 
-  // Blue — card draw, counterspells, flyers
+  // Blue — card draw, counterspells, flyers (strictly mono-blue)
   blue: {
     color: 'blue',
     cards: [
       qty('air_elemental', 4),
       qty('counterspell', 4),
-      qty('brainstorm', 4),
-      qty('white_knight', 4), // cheap blockers
-      qty('goblin_guide', 4),
+      qty('brainstorm', 5),
     ],
   },
 
-  // Black — removal, vampires, dark rituals
+  // Black — removal, vampires, dark rituals (strictly mono-black)
   black: {
     color: 'black',
     cards: [
       qty('sengir_vampire', 4),
       qty('dark_ritual', 4),
-      qty('terror', 4),
-      qty('goblin_guide', 4),  // cheap early aggro
-      qty('lightning_bolt', 4),
+      qty('terror', 5),
     ],
   },
 
-  // Red — aggro, direct damage, haste
+  // Red — aggro, direct damage, haste (strictly mono-red)
   red: {
     color: 'red',
     cards: [
-      qty('goblin_guide', 4),
-      qty('lightning_bolt', 4),
+      qty('goblin_guide', 5),
+      qty('lightning_bolt', 5),
       qty('shivan_dragon', 2),
-      qty('white_knight', 4), // blockers
-      qty('giant_growth', 4),
-      qty('llanowar_elves', 2),
     ],
   },
 
-  // Green — big creatures, mana ramp
+  // Green — big creatures, mana ramp (strictly mono-green)
   green: {
     color: 'green',
     cards: [
-      qty('llanowar_elves', 4),
-      qty('giant_growth', 4),
+      qty('llanowar_elves', 5),
+      qty('giant_growth', 5),
       qty('force_of_nature', 2),
-      qty('serra_angel', 4), // flyers for reach
-      qty('white_knight', 4),
-      qty('goblin_guide', 2),
     ],
   },
 
@@ -515,8 +521,9 @@ export const AI_DECKS = {
       qty('llanowar_elves', 3),            // early ramp
       // The reset button — board wipe when falling behind
       triadQty('supreme_verdict', 2),      // destroy ALL creatures
-      // Combat tricks
+      // Combat tricks — including split-second to shut down counter wars
       qty('giant_growth', 2),              // +3/+3 surprise
+      triadQty('stonewood_invocation', 2), // split second +5/+5 — cannot be countered
       // Cheap early defense
       qty('white_knight', 2),              // first strike blocker
     ],
@@ -541,6 +548,7 @@ export const AI_DECKS = {
       triadQty('maelstrom_pulse', 2),      // exile — permanently removes threats
       triadQty('kolaghan_command', 2),     // 2 damage + force discard
       qty('lightning_bolt', 3),            // 3 damage — kills creatures or player
+      triadQty('sudden_shock', 2),         // split second 2 damage — cannot be countered
       // Finisher
       qty('force_of_nature', 2),           // 8/8 trample — game over
       // Mana acceleration

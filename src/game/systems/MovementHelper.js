@@ -102,6 +102,13 @@ export function updateDirectionIndicator(indicator, player) {
  * Uses flipX for left/right. Returns movement result with direction.
  */
 export function handleMovement(player, cursors, wasd, indicator) {
+  // Block movement while any text input or textarea has focus (deck builder search, etc.)
+  const tag = document.activeElement?.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA') {
+    player.setVelocity(0, 0)
+    return
+  }
+
   const S = MOVE_SPEED
   let vx = 0, vy = 0
   if (cursors.left.isDown  || wasd.left.isDown)  vx = -S

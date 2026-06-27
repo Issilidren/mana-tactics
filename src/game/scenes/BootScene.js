@@ -67,6 +67,18 @@ export default class BootScene extends Phaser.Scene {
     this.load.image('npc-gemini',  'assets/sprites/npc-gemini.png')
     this.load.image('npc-claude',  'assets/sprites/npc-claude.png')
 
+    // Hub tileset sprites (IsoEngine HubScene)
+    this.load.image('hub-fountain',   'assets/tiles/hub/fountain.png')
+    this.load.image('hub-bookshelf',  'assets/tiles/hub/bookshelf.png')
+    this.load.image('hub-desk',       'assets/tiles/hub/desk.png')
+    this.load.image('hub-plant',      'assets/tiles/hub/plant.png')
+    this.load.image('hub-lantern',    'assets/tiles/hub/lantern.png')
+    this.load.image('hub-crystals',   'assets/tiles/hub/crystals.png')
+    this.load.image('hub-floor-stone','assets/tiles/hub/floor-stone.png')
+    this.load.image('hub-stairs',     'assets/tiles/hub/stairs.png')
+    this.load.image('hub-pedestal',   'assets/tiles/hub/pedestal.png')
+    this.load.image('hub-balustrade', 'assets/tiles/hub/balustrade.png')
+
     // Card art illustrations
     this.load.image('art-island',          'assets/card-art/island.png')
     this.load.image('art-mountain',        'assets/card-art/mountain.png')
@@ -87,7 +99,7 @@ export default class BootScene extends Phaser.Scene {
   }
 
   create() {
-    // Always show Title — every Final Fantasy boots to its title screen
-    this.scene.start('Title')
+    // Returning players skip the title screen entirely
+    this.scene.start(localStorage.getItem('mt_starter') ? 'Hub' : 'Title')
   }
 }

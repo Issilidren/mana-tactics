@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import api from '../lib/axios'
+import { supabase } from '../lib/supabase'
 import PhaserGame from '../game/PhaserGame'
 import BattleScreen from '../game/BattleScreen'
 import ShopOverlay from '../game/ShopOverlay'
@@ -13,6 +14,65 @@ const STARTER_NAMES = {
   black: "Shadow's Grasp",
   red:   "Flame's Fury",
   green: "Wild's Call",
+}
+
+// Seed-card UUIDs guaranteed to exist — used in every starter deck
+const SEED_CARDS = {
+  white_knight: '00000001-0000-0000-0000-000000000003',
+  serra_angel:  '00000001-0000-0000-0000-000000000001',
+  archangel:    '00000001-0000-0000-0000-000000000002',
+  air_elemental:'00000001-0000-0000-0000-000000000004',
+  counterspell: '00000001-0000-0000-0000-000000000005',
+  brainstorm:   '00000001-0000-0000-0000-000000000006',
+  sengir_vampire:'00000001-0000-0000-0000-000000000007',
+  dark_ritual:  '00000001-0000-0000-0000-000000000008',
+  terror:       '00000001-0000-0000-0000-000000000009',
+  shivan_dragon:'00000001-0000-0000-0000-000000000010',
+  lightning_bolt:'00000001-0000-0000-0000-000000000011',
+  goblin_guide: '00000001-0000-0000-0000-000000000012',
+  force_of_nature:'00000001-0000-0000-0000-000000000013',
+  llanowar_elves:'00000001-0000-0000-0000-000000000014',
+  giant_growth: '00000001-0000-0000-0000-000000000015',
+  plains:       '00000001-0000-0000-0000-000000000016',
+  island:       '00000001-0000-0000-0000-000000000017',
+  swamp:        '00000001-0000-0000-0000-000000000018',
+  mountain:     '00000001-0000-0000-0000-000000000019',
+  forest:       '00000001-0000-0000-0000-000000000020',
+}
+
+// Curated seed cards per color: { card_id, quantity }[]
+// 10 lands + ~20 non-land = 30 cards
+const STARTER_SEED_CARDS = {
+  white: [
+    { card_id: SEED_CARDS.white_knight,  quantity: 4 },
+    { card_id: SEED_CARDS.serra_angel,   quantity: 3 },
+    { card_id: SEED_CARDS.archangel,     quantity: 2 },
+    { card_id: SEED_CARDS.plains,        quantity: 10 },
+  ],
+  blue: [
+    { card_id: SEED_CARDS.air_elemental, quantity: 3 },
+    { card_id: SEED_CARDS.counterspell,  quantity: 4 },
+    { card_id: SEED_CARDS.brainstorm,    quantity: 4 },
+    { card_id: SEED_CARDS.island,        quantity: 10 },
+  ],
+  black: [
+    { card_id: SEED_CARDS.sengir_vampire,quantity: 3 },
+    { card_id: SEED_CARDS.dark_ritual,   quantity: 4 },
+    { card_id: SEED_CARDS.terror,        quantity: 4 },
+    { card_id: SEED_CARDS.swamp,         quantity: 10 },
+  ],
+  red: [
+    { card_id: SEED_CARDS.lightning_bolt,quantity: 4 },
+    { card_id: SEED_CARDS.goblin_guide,  quantity: 3 },
+    { card_id: SEED_CARDS.shivan_dragon, quantity: 2 },
+    { card_id: SEED_CARDS.mountain,      quantity: 10 },
+  ],
+  green: [
+    { card_id: SEED_CARDS.llanowar_elves,quantity: 4 },
+    { card_id: SEED_CARDS.giant_growth,  quantity: 4 },
+    { card_id: SEED_CARDS.force_of_nature,quantity: 2 },
+    { card_id: SEED_CARDS.forest,        quantity: 10 },
+  ],
 }
 
 export default function GamePage() {
@@ -28,11 +88,12 @@ export default function GamePage() {
   const [gameOver, setGameOver] = useState(false)
   const [gameComplete, setGameComplete] = useState(false)
   const [deckOpen, setDeckOpen] = useState(false)
+  const [collectionVersion, setCollectionVersion] = useState(0)
   const [shopListing, setShopListing]   = useState(null)
   const [progress, setProgress]         = useState(() => ({
     gold:  parseInt(localStorage.getItem('mt_gold')  ?? '0', 10),
     seals: JSON.parse(localStorage.getItem('mt_seals') ?? '[]'),
-    hp:    10,
+    hp:    parseInt(localStorage.getItem('mt_hp') ?? '10', 10),
   }))
 
   useEffect(() => {
@@ -58,14 +119,24 @@ export default function GamePage() {
   }
 
   async function saveProgress(gold, hp, seals) {
+    localStorage.setItem('mt_gold',  String(gold))
+    localStorage.setItem('mt_hp',    String(hp))
+    localStorage.setItem('mt_seals', JSON.stringify(seals))
     try {
-      await api.post('/player_profiles',
-        { user_id: user.id, gold, hp, seals, updated_at: new Date().toISOString() },
+      await api.post('/player_profiles?on_conflict=user_id',
+        { user_id: user.id, gold, hp, seals },
         { headers: { Prefer: 'resolution=merge-duplicates,return=representation' } }
       )
     } catch (_) {}
-    localStorage.setItem('mt_gold',  String(gold))
-    localStorage.setItem('mt_seals', JSON.stringify(seals))
+  }
+
+  async function logTransaction(eventType, goldDelta, hpDelta, description) {
+    try {
+      await api.post('/transactions', {
+        user_id: user.id, event_type: eventType,
+        gold_delta: goldDelta, hp_delta: hpDelta, description,
+      })
+    } catch (_) {}
   }
 
   async function fetchShopListing() {
@@ -99,14 +170,38 @@ export default function GamePage() {
       const deckRes = await api.post('/decks', { user_id: user.id, name, color, description: `Your first deck — ${name}` })
       const deck    = deckRes.data[0]
       if (!deck) return
-      const cardRes = await api.get(`/cards?color=eq.${color}&type=neq.land&order=rarity.desc&limit=18`)
-      if (cardRes.data.length)
-        await api.post('/deck_cards', cardRes.data.map(c => ({ deck_id: deck.id, card_id: c.id, quantity: 2 })))
-      const landRes = await api.get(`/cards?type=eq.land&color=eq.${color}&limit=4`)
-      if (landRes.data.length)
-        await api.post('/deck_cards', landRes.data.map(c => ({ deck_id: deck.id, card_id: c.id, quantity: 3 })))
+
+      // Start with curated seed cards for this color
+      const seedSlots  = STARTER_SEED_CARDS[color] ?? STARTER_SEED_CARDS.white
+      const deckCards  = [...seedSlots]                      // { card_id, quantity }[]
+      const collCards  = [...seedSlots]                      // same set goes into collection
+
+      // Fill up to 30 with common/uncommon Scryfall cards of this color (no lands)
+      const totalSeed  = seedSlots.reduce((s, e) => s + e.quantity, 0)
+      const needed     = 30 - totalSeed
+      if (needed > 0) {
+        const fillRes = await api.get(
+          `/cards?color=eq.${color}&type=neq.land&rarity=in.(common,uncommon)&limit=${Math.ceil(needed / 2)}`
+        )
+        const filled = fillRes.data.map(c => ({ card_id: c.id, quantity: 2 })).slice(0, Math.ceil(needed / 2))
+        deckCards.push(...filled)
+        collCards.push(...filled)
+      }
+
+      // Write deck_cards
+      await api.post('/deck_cards', deckCards.map(e => ({ deck_id: deck.id, card_id: e.card_id, quantity: e.quantity })))
+
+      // Seed the player_cards collection — use Supabase client to avoid Prefer header conflicts
+      const { error: collErr } = await supabase
+        .from('player_cards')
+        .upsert(
+          collCards.map(e => ({ user_id: user.id, card_id: e.card_id, quantity: e.quantity })),
+          { onConflict: 'user_id,card_id' }
+        )
+      if (collErr) console.error('player_cards seed failed:', collErr)
+
       await loadDeckCards(deck.id)
-    } catch (_) {}
+    } catch (err) { console.error('handleStarterPicked failed:', err) }
   }
 
   function handleBattleStart(npcData) {
@@ -144,11 +239,41 @@ export default function GamePage() {
     }
     setProgress(next)
     saveProgress(next.gold, next.hp, next.seals)
+    if (winner === 'player') {
+      const goldEarned = (reward ?? 0)
+      const hpGained   = next.hp - progress.hp
+      logTransaction('battle_win', goldEarned, hpGained,
+        `Defeated ${activeBattle?.name ?? 'opponent'} — +${goldEarned} gold, +${hpGained} HP`)
+    } else {
+      logTransaction('battle_loss', 0, -(hpDamage),
+        `Retreated from ${activeBattle?.name ?? 'battle'} — -${hpDamage} HP`)
+    }
     if (isFirstSealWin) {
       const offset = Math.floor(Math.random() * 315)
-      api.get(`/cards?order=id.asc&limit=5&offset=${offset}`)
-        .then(res => { if (res.data?.length) setPrizePackCards(res.data) })
-        .catch(() => {})
+      api.get(`/cards?order=id.asc&limit=5&offset=${offset}`).then(async res => {
+        const cards = res.data
+        if (!cards?.length) return
+        setPrizePackCards(cards)
+        // Add prize cards to collection with proper quantity increment
+        try {
+          const cardIds = cards.map(c => c.id)
+          const { data: existing } = await supabase
+            .from('player_cards')
+            .select('card_id,quantity')
+            .eq('user_id', user.id)
+            .in('card_id', cardIds)
+          const owned = {}
+          for (const row of existing || []) owned[row.card_id] = row.quantity
+          const { error } = await supabase
+            .from('player_cards')
+            .upsert(
+              cards.map(c => ({ user_id: user.id, card_id: c.id, quantity: (owned[c.id] || 0) + 1 })),
+              { onConflict: 'user_id,card_id' }
+            )
+          if (error) throw error
+          setCollectionVersion(v => v + 1)
+        } catch (err) { console.error('Prize pack upsert failed:', err) }
+      }).catch(() => {})
     }
   }
 
@@ -156,25 +281,63 @@ export default function GamePage() {
     if (!shopListing || progress.gold < shopListing.gold_price) return []
     try {
       const offset = Math.floor(Math.random() * 315)
-      const [cardsRes] = await Promise.all([
-        api.get(`/cards?order=id.asc&limit=5&offset=${offset}`),
-        api.post('/purchases', {
-          user_id: user.id, listing_id: shopListing.id, gold_spent: shopListing.gold_price,
-        }),
-      ])
+      const cardsRes = await api.get(`/cards?order=id.asc&limit=5&offset=${offset}`)
+      if (!cardsRes.data?.length) return []
+
+      // Deduct gold immediately — this must not be blocked by purchases/collection saves
       const next = { ...progress, gold: progress.gold - shopListing.gold_price }
       setProgress(next)
       saveProgress(next.gold, next.hp, next.seals)
-      return cardsRes.data
-    } catch (_) { return [] }
+      logTransaction('shop_purchase', -shopListing.gold_price, 0,
+        `Bought Booster Pack — -${shopListing.gold_price} gold`)
+
+      // Log purchase — fire and forget, never block the card reveal
+      api.post('/purchases', {
+        user_id: user.id, listing_id: shopListing.id, gold_spent: shopListing.gold_price,
+      }).catch(e => console.warn('purchases log failed:', e))
+
+      // Add to collection — separate async block, never blocks card reveal
+      const cards = cardsRes.data
+      ;(async () => {
+        try {
+          const cardIds = cards.map(c => c.id)
+          const { data: existing } = await supabase
+            .from('player_cards')
+            .select('card_id,quantity')
+            .eq('user_id', user.id)
+            .in('card_id', cardIds)
+          const owned = {}
+          for (const row of existing || []) owned[row.card_id] = row.quantity
+          const { error } = await supabase
+            .from('player_cards')
+            .upsert(
+              cards.map(c => ({ user_id: user.id, card_id: c.id, quantity: (owned[c.id] || 0) + 1 })),
+              { onConflict: 'user_id,card_id' }
+            )
+          if (error) console.error('player_cards upsert error:', error)
+        } catch (e) {
+          console.error('Failed to save pack cards to collection:', e)
+        } finally {
+          setCollectionVersion(v => v + 1)
+        }
+      })()
+
+      return cards
+    } catch (err) {
+      console.error('handleBuyPack failed:', err)
+      return []
+    }
   }
 
   function handlePlayerRest() {
     if (progress.hp >= 10) return
-    const cost = progress.gold >= 20 ? 20 : 0
-    const next = { ...progress, hp: 10, gold: progress.gold - cost }
+    const cost     = progress.gold >= 20 ? 20 : 0
+    const hpGained = 10 - progress.hp
+    const next     = { ...progress, hp: 10, gold: progress.gold - cost }
     setProgress(next)
     saveProgress(next.gold, next.hp, next.seals)
+    logTransaction('caretaker_rest', -cost, hpGained,
+      `Rested at academy — ${cost > 0 ? `-${cost} gold, ` : 'free, '}+${hpGained} HP`)
   }
 
   if (loading) return (
@@ -187,7 +350,6 @@ export default function GamePage() {
     <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', background: '#080510' }}>
       <GameMenuTab
         onDeckBuilder={() => setDeckOpen(true)}
-        onExitGame={() => navigate('/')}
         onSignOut={async () => { try { await signOut?.() } catch (_) {} navigate('/login') }}
       />
       <PhaserGame
@@ -197,7 +359,7 @@ export default function GamePage() {
         onStarterPicked={handleStarterPicked}
         onShopOpen={() => setShopOpen(true)}
         onPlayerRest={handlePlayerRest}
-        onExitGame={() => navigate('/')}
+        onExitGame={() => setDeckOpen(true)}
         onGameReady={(game) => { gameRef.current = game }}
       />
 
@@ -233,7 +395,7 @@ export default function GamePage() {
               borderRadius: 6, cursor: 'pointer', lineHeight: 1,
             }}
           >✕</button>
-          <Home onClose={() => setDeckOpen(false)} />
+          <Home onClose={() => setDeckOpen(false)} collectionVersion={collectionVersion} />
         </div>
       )}
 
@@ -335,7 +497,7 @@ export default function GamePage() {
   )
 }
 
-function GameMenuTab({ onDeckBuilder, onExitGame, onSignOut }) {
+function GameMenuTab({ onDeckBuilder, onSignOut }) {
   const [open, setOpen] = useState(false)
 
   const btn = (label, icon, onClick, danger) => (
@@ -385,7 +547,6 @@ function GameMenuTab({ onDeckBuilder, onExitGame, onSignOut }) {
             — ACADEMY MENU —
           </div>
           {btn('Deck Builder', '⚔', onDeckBuilder)}
-          {btn('Exit to Menu', '↩', onExitGame)}
           {btn('Sign Out', '✕', onSignOut, true)}
         </div>
       )}
