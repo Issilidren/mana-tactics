@@ -1,38 +1,40 @@
 import Phaser from 'phaser'
+import IsoEngine, { TILE } from '../systems/IsoEngine.js'
 import { SoundEngine } from '../systems/SoundEngine.js'
-import { tileToWorld, placeProp, buildWalls } from '../systems/IsoEngine.js'
-import { setupPlayerBody, setupNPCBody, handleMovement, createDirectionIndicator, updateDirectionIndicator } from '../systems/MovementHelper.js'
 
-const TILE = 32
-const COLS = 25
-const ROWS = 18
+// ── Tile aliases ──────────────────────────────────────────────────────────────
+const S  = TILE.STONE, G = TILE.GRASS, W  = TILE.WATER
+const WL = TILE.WALL,  BK = TILE.BOOKSHELF, TB = TILE.TABLE
+const FN = TILE.FOUNTAIN, DR = TILE.DOOR
 
-// W=wall  F=floor. Bottom wall has a 3-tile gap (cols 11-13) for the World Map door.
+// ── Hub Academy Courtyard — 20 cols × 16 rows ──────────────────────────────
 // prettier-ignore
-const MAP = [
-  'WWWWWWWWWWWWWWWWWWWWWWWWW', // 0  top wall
-  'WFFFFFFFFFFFFFFFFFFFFFFFW', // 1
-  'WFFFFFFFFFFFFFFFFFFFFFFFW', // 2
-  'WFFFFFFFFFFFFFFFFFFFFFFFW', // 3
-  'WFFFFWFFFFFFFFFFFFFWFFFFW', // 4  study tables
-  'WFFFFFFFFFFFFFFFFFFFFFFFW', // 5
-  'WFFFFFFFFFFFFFFFFFFFFFFFW', // 6
-  'WFFFFFFFFFFWWWWFFFFFFFFFW', // 7  fountain outer
-  'WFFFFFFFFFWWWWWFFFFFFFFFW', // 8  fountain basin
-  'WFFFFFFFFFWWWWWFFFFFFFFFW', // 9  fountain center
-  'WFFFFFFFFFWWWWWFFFFFFFFFW', // 10 fountain basin
-  'WFFFFFFFFFFWWWWFFFFFFFFFW', // 11 fountain base
-  'WFFFFFFFFFFFFFFFFFFFFFFFW', // 12
-  'WFFFFWFFFFFFFFFFFFFWFFFFW', // 13 study tables
-  'WFFFFFFFFFFFFFFFFFFFFFFFW', // 14
-  'WFFFFFFFFFFFFFFFFFFFFFFFW', // 15
-  'WFFFFFFFFFFFFFFFFFFFFFFFW', // 16
-  'WWWWWWWWWWWFFFWWWWWWWWWWW', // 17 bottom wall — gap at cols 11-13
+const HUB_MAP = [
+  [WL,WL,WL,WL,WL,WL,WL,WL,WL,DR,DR,WL,WL,WL,WL,WL,WL,WL,WL,WL],  // 0 top wall + sanctum door
+  [WL, S, S, S, S,BK, S, S, S, S, S, S, S, S,BK, S, S, S, S,WL],  // 1
+  [WL, S, S, S, S, S, S, S, S, S, S, S, S, S, S, S, S, S, S,WL],  // 2
+  [WL, S, S,TB, S, S, S, S, S, S, S, S, S, S, S, S,TB, S, S,WL],  // 3 study tables
+  [WL, S, S, S, S, S, S, S, G, G, G, G, S, S, S, S, S, S, S,WL],  // 4
+  [DR, S, S, S, S, S, S, G, G, G, G, G, G, S, S, S, S, S, S,DR],  // 5 left/right doors
+  [WL, S, S, S, S, S, G, G, G,FN,FN, G, G, G, S, S, S, S, S,WL],  // 6
+  [WL, S, S, S, S, S, G, G,FN, W, W,FN, G, G, S, S, S, S, S,WL],  // 7 fountain
+  [WL, S, S, S, S, S, G, G,FN, W, W,FN, G, G, S, S, S, S, S,WL],  // 8
+  [WL, S, S, S, S, S, G, G, G,FN,FN, G, G, G, S, S, S, S, S,WL],  // 9
+  [DR, S, S, S, S, S, S, G, G, G, G, G, G, S, S, S, S, S, S,DR],  // 10 left/right doors
+  [WL, S, S, S, S, S, S, S, G, G, G, G, S, S, S, S, S, S, S,WL],  // 11
+  [WL, S, S,TB, S, S, S, S, S, S, S, S, S, S, S, S,TB, S, S,WL],  // 12 study tables
+  [WL, S, S, S, S, S, S, S, S, S, S, S, S, S, S, S, S, S, S,WL],  // 13
+  [WL, S, S, S, S,BK, S, S, S, S, S, S, S, S,BK, S, S, S, S,WL],  // 14
+  [WL,WL,WL,WL,WL,WL,WL,WL,WL,DR,DR,WL,WL,WL,WL,WL,WL,WL,WL,WL],  // 15 bottom wall + world map door
 ]
 
+const MAP_COLS = HUB_MAP[0].length   // 20
+const MAP_ROWS = HUB_MAP.length      // 16
+
+// ── NPC definitions — all 8, positions remapped for 20×16 isometric map ─────
 const NPC_DEFS = [
   {
-    key: 'librarian', texture: 'npc-librarian', tileX: 4, tileY: 3,
+    key: 'librarian', texture: 'npc-librarian', col: 4, row: 2,
     tabColor: 0xCC44AA, name: 'Grand Librarian Mira',
     dialog: [
       'Welcome to the Mana Academy, Initiate!',
@@ -42,7 +44,7 @@ const NPC_DEFS = [
     battle: null,
   },
   {
-    key: 'white-scholar', texture: 'npc-white', tileX: 5, tileY: 5,
+    key: 'white-scholar', texture: 'npc-water-student', col: 4, row: 4,
     tabColor: 0xB89A20, name: 'Scholar Lirien',
     dialog: [
       'White mages believe in order, unity, and protection.',
@@ -51,7 +53,7 @@ const NPC_DEFS = [
     battle: { npcName: 'Scholar Lirien', color: 'white', deckType: 'white', reward: 30, difficulty: 'easy' },
   },
   {
-    key: 'red-knight', texture: 'npc-red', tileX: 19, tileY: 5,
+    key: 'red-knight', texture: 'npc-fire-student', col: 15, row: 4,
     tabColor: 0xAA2200, name: 'Knight Embrus',
     dialog: [
       'Red mages strike fast and burn everything in their path.',
@@ -60,7 +62,7 @@ const NPC_DEFS = [
     battle: { npcName: 'Knight Embrus', color: 'red', deckType: 'red', reward: 30, difficulty: 'easy' },
   },
   {
-    key: 'practice-duelist', texture: 'npc-blue', tileX: 8, tileY: 9,
+    key: 'practice-duelist', texture: 'npc-wind-student', col: 7, row: 11,
     tabColor: 0x1A4A90, name: 'Duelist Kael',
     dialog: [
       'Another new initiate. Fine — I\'ll spare a few minutes.',
@@ -70,7 +72,7 @@ const NPC_DEFS = [
     battle: { npcName: 'Duelist Kael', color: 'blue', deckType: 'starter', reward: 10, tutorial: true, difficulty: 'easy' },
   },
   {
-    key: 'green-ranger', texture: 'npc-green', tileX: 5, tileY: 12,
+    key: 'green-ranger', texture: 'npc-earth-student', col: 4, row: 11,
     tabColor: 0x1A6818, name: 'Ranger Thornwood',
     dialog: [
       'The green wilds grow strong with massive creatures.',
@@ -79,7 +81,7 @@ const NPC_DEFS = [
     battle: { npcName: 'Ranger Thornwood', color: 'green', deckType: 'green', reward: 30, difficulty: 'easy' },
   },
   {
-    key: 'black-shade', texture: 'npc-black', tileX: 19, tileY: 12,
+    key: 'black-shade', texture: 'npc-shadow-student', col: 15, row: 11,
     tabColor: 0x501880, name: 'Shade Duskren',
     dialog: [
       '...',
@@ -88,7 +90,7 @@ const NPC_DEFS = [
     battle: { npcName: 'Shade Duskren', color: 'black', deckType: 'black', reward: 30, difficulty: 'easy' },
   },
   {
-    key: 'shopkeeper', texture: 'npc-merchant', tileX: 21, tileY: 4,
+    key: 'shopkeeper', texture: 'npc-merchant', col: 17, row: 3,
     tabColor: 0xC8961E, name: 'Merchant Voss',
     dialog: [
       'Welcome, initiate. I deal in rare cards — knowledge has its price.',
@@ -98,7 +100,7 @@ const NPC_DEFS = [
     shop: true,
   },
   {
-    key: 'caretaker', texture: 'npc-caretaker', tileX: 10, tileY: 7,
+    key: 'caretaker', texture: 'npc-caretaker', col: 10, row: 3,
     tabColor: 0x44AA88, name: 'Caretaker Elys',
     dialog: [
       'The academy takes care of its initiates.',
@@ -111,34 +113,54 @@ const NPC_DEFS = [
 export default class HubScene extends Phaser.Scene {
   constructor() {
     super('Hub')
-    this.player        = null
-    this.cursors       = null
-    this.wasd          = null
-    this.npcs          = []
-    this.dialogState   = null
-    this.promptLabel   = null
-    this.eKey          = null
-    this.portalBounds  = null
-    this.shopBounds    = null
-    this.statsText     = null
-    this.transitioning = false
-    this.minimapGfx    = null
+    this.iso            = null
+    this.playerSprite   = null
+    this.playerGrid     = null
+    this.isMoving       = false
+    this.transitioning  = false
+    this.cursors        = null
+    this.wasd           = null
+    this.eKey           = null
+    this.npcs           = []
+    this.dialogState    = null
+    this.promptLabel    = null
+    this.statsText      = null
+    this.minimapGfx     = null
     this.minimapPlayerDot = null
-    this.dirIndicator  = null
-    this.leftPassageBounds = null
-    this.sanctumBounds = null
+    this._mmX = 0; this._mmY = 0; this._mmSW = 0; this._mmSH = 0
     this._sanctumHintShown = false
   }
 
+  init() {
+    this.playerGrid     = { col: 10, row: 12 }
+    this.isMoving       = false
+    this.transitioning  = false
+    this.dialogState    = null
+    this._sanctumHintShown = false
+    this.npcs           = []
+  }
+
   create() {
-    this.transitioning = false
-    this.drawMap()            // floor graphics + physics walls
-    this.drawFurniture()      // counter, carpet, desks, bookshelves, plants, lanterns
-    this.drawFountain()       // fountain sprite + glow
-    this.drawPortalDoor()     // portal arch at south wall
-    this.setupTriggerZones()
+    const sw = this.scale.width, sh = this.scale.height
+    const tw = 64, th = 32
+
+    // Auto-center the isometric map on screen
+    const originX = sw / 2 - ((MAP_COLS - 1) - (MAP_ROWS - 1)) * (tw / 4)
+    const originY = sh / 2 - ((MAP_COLS - 1) + (MAP_ROWS - 1)) * (th / 4) + 20
+
+    this.iso = new IsoEngine(this, { tileWidth: tw, tileHeight: th, originX, originY })
+    this.iso.loadMap(HUB_MAP)
+
+    // Pre-rendered isometric background — scripts/gen_hub_bg.py draws this from
+    // the same HUB_MAP + grid math as IsoEngine, so characters walk in the right
+    // spots without any tile-sprite extraction. Centered at world (400,306) to
+    // cover the full IsoEngine camera bounds (-192,-12)→(992,624).
+    this.add.image(400, 306, 'hub-bg').setDepth(-2)
+
+    this._addFountainGlow(originX, originY, tw, th)
+    this._addPortalLabels(sw, sh)
+
     this.createPlayer()
-    this.dirIndicator = createDirectionIndicator(this, this.player)
     this.createNPCs()
     this.setupCamera()
     this.setupInput()
@@ -146,222 +168,82 @@ export default class HubScene extends Phaser.Scene {
     this.startNPCBehaviors()
   }
 
-  // ── Floor tiles + physics walls ────────────────────────────────────────────
+  // ── Fountain glow overlay ──────────────────────────────────────────────────
 
-  drawMap() {
-    // Warm stone floor with subtle checkerboard shading
-    const g = this.add.graphics().setDepth(0)
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) {
-        if (MAP[r]?.[c] === 'W') continue
-        g.fillStyle(((r + c) % 2 === 0) ? 0xBB9E72 : 0xAF9264)
-        g.fillRect(c * TILE, r * TILE, TILE, TILE)
-      }
-    }
-    // Subtle mortar lines
-    g.lineStyle(1, 0x8A6840, 0.18)
-    for (let c = 0; c <= COLS; c++) g.lineBetween(c * TILE, 0, c * TILE, ROWS * TILE)
-    for (let r = 0; r <= ROWS; r++) g.lineBetween(0, r * TILE, COLS * TILE, r * TILE)
+  _addFountainGlow(originX, originY, tw, th) {
+    // Fountain center at grid (9,7) / (10,7) / (9,8) / (10,8) — pick midpoint
+    const cx = originX + (9.5 - 7.5) * (tw / 2)
+    const cy = originY + (9.5 + 7.5) * (th / 2)
 
-    this.wallGroup = buildWalls(this, MAP)
-  }
-
-  // ── Fountain — tileset sprite + animated glow ──────────────────────────────
-
-  drawFountain() {
-    // Fountain block center: col 12, row 9.  Anchor sprite to bottom of row 11.
-    const cx = 12 * TILE + TILE / 2   // 400
-    const baseY = 12 * TILE           // 384 — bottom of block
-
-    const fSpr = this.add.image(cx, baseY, 'hub-fountain')
-      .setOrigin(0.5, 1.0)
-      .setDepth(3)
-    if (fSpr.height > 0) fSpr.setScale((5 * TILE) / fSpr.height)
-
-    // Pulsing blue-green glow behind the crystal
-    const glow = this.add.graphics().setDepth(2).setAlpha(0.25)
-    glow.fillStyle(0x40C0D0, 0.18)
-    glow.fillCircle(cx, baseY - 80, 64)
+    const glow = this.add.graphics().setDepth(50).setAlpha(0.22)
+    glow.fillStyle(0x40C0D0, 0.2)
+    glow.fillCircle(cx, cy, 40)
     this.tweens.add({
-      targets: glow,
-      alpha: { from: 0.15, to: 0.45 },
-      scaleX: { from: 0.88, to: 1.18 },
-      scaleY: { from: 0.88, to: 1.18 },
+      targets: glow, alpha: { from: 0.12, to: 0.38 },
+      scaleX: { from: 0.85, to: 1.2 }, scaleY: { from: 0.85, to: 1.2 },
       duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
     })
 
-    // Rising sparkles
     for (let i = 0; i < 5; i++) {
       const angle = (i / 5) * Math.PI * 2
-      const sx = cx + Math.cos(angle) * 22
-      const sy = baseY - 120 + Math.sin(angle) * 10
-      const spark = this.add.text(sx, sy, '✦', {
-        fontSize: '8px', color: '#80E0F0',
-      }).setOrigin(0.5).setDepth(4).setAlpha(0)
+      const sx = cx + Math.cos(angle) * 18
+      const sy = cy + Math.sin(angle) * 10
+      const spark = this.add.text(sx, sy, '✦', { fontSize: '7px', color: '#80E0F0' })
+        .setOrigin(0.5).setDepth(51).setAlpha(0)
       this.tweens.add({
-        targets: spark,
-        alpha: { from: 0, to: 0.7 }, y: sy - 14,
+        targets: spark, alpha: { from: 0, to: 0.7 }, y: sy - 12,
         duration: 1800 + i * 300, yoyo: true, repeat: -1, delay: i * 380,
       })
     }
-
-    this.add.text(cx, baseY + 6, '✦ MANA ACADEMY ✦', {
-      fontSize: '9px', color: '#907050', fontFamily: 'monospace',
-    }).setOrigin(0.5, 0).setDepth(4)
   }
 
-  // ── Furniture & decoration ─────────────────────────────────────────────────
+  // ── Portal / destination labels (world space) ──────────────────────────────
 
-  drawFurniture() {
-    const g = this.add.graphics().setDepth(2)
-
-    // ── 1. Librarian counter (cols 1-8, rows 1-2) — dark wood Graphics ────
-    const cX = TILE, cY = TILE, cW = 8 * TILE, cH = 2 * TILE
-    g.fillStyle(0x4A2E10)
-    g.fillRect(cX, cY, cW, cH)
-    const spineC = [0xCC2200, 0x2255AA, 0x228822, 0xCC8800, 0x6633AA, 0x005588, 0xCC2200, 0x228822]
-    for (let bi = 0; bi < 8; bi++) {
-      const bx = cX + 4 + bi * (cW / 8), bw = cW / 8 - 6
-      g.fillStyle(spineC[bi % spineC.length])
-      g.fillRect(bx, cY + 3, bw, cH - 10)
-      g.fillStyle(0xFFFFFF, 0.15)
-      g.fillRect(bx + 1, cY + 3, 2, cH - 10)
+  _addPortalLabels() {
+    const labelPortals = [
+      { col: 9, row: 15, label: 'WORLD MAP' },
+      { col: 9, row: 0,  label: 'SANCTUM ✦' },
+      { col: 0, row: 5,  label: 'ARCHIVES' },
+    ]
+    for (const { col, row, label } of labelPortals) {
+      const pos = this.iso.gridToScreen(col, row)
+      this.add.text(pos.x, pos.y - 20, label, {
+        fontSize: '9px', color: '#D4AF37', fontFamily: 'Courier New, monospace',
+        stroke: '#000000', strokeThickness: 2,
+      }).setOrigin(0.5).setDepth(200)
     }
-    g.fillStyle(0x7A5030)
-    g.fillRect(cX, cY + cH - 10, cW, 10)
-    g.lineStyle(3, 0xD4AF37, 1)
-    g.strokeRect(cX, cY, cW, cH)
-    g.lineStyle(1, 0xD4AF37, 0.4)
-    g.lineBetween(cX, cY + cH / 2, cX + cW, cY + cH / 2)
-
-    // ── 2. Duel marker — small rug near Duelist Kael (col 7-9, row 8-10) ──
-    const dX = 7 * TILE, dY = 8 * TILE, dW = 3 * TILE, dH = 3 * TILE
-    g.fillStyle(0x38882A)
-    g.fillRect(dX, dY, dW, dH)
-    g.lineStyle(2, 0xD4AF37, 0.7)
-    g.strokeRect(dX, dY, dW, dH)
-
-    // ── 3. Study desks — tileset sprite ──────────────────────────────────
-    for (const [col, row] of [[5, 4], [19, 4], [5, 13], [19, 13]])
-      placeProp(this, 'hub-desk', col, row, { targetH: 52, depth: 2 })
-
-    // ── 4. Bookshelves — tileset sprite, one covering each 5-row block ───
-    // Anchored to bottom of row 6 / row 14 so they span 5 rows upward
-    placeProp(this, 'hub-bookshelf', 23,  6, { targetH: 5 * TILE, depth: 2 })
-    placeProp(this, 'hub-bookshelf', 23, 14, { targetH: 5 * TILE, depth: 2 })
-
-    // ── 5. Plants — tileset sprite ────────────────────────────────────────
-    for (const [col, row] of [[1, 6], [1, 10], [8, 16], [16, 16]])
-      placeProp(this, 'hub-plant', col, row, { targetH: 44, depth: 2 })
-
-    // ── 6. Lanterns — away from bookshelves (right ones at col 20, not 22) ─
-    for (const [col, row] of [[2, 2], [2, 14], [20, 2], [20, 14]])
-      placeProp(this, 'hub-lantern', col, row, { targetH: 40, depth: 2 })
-
-    // ── 7. Physics walls for all props so player can't walk through them ──
-    // Desks — one tile each
-    for (const [col, row] of [[5, 4], [19, 4], [5, 13], [19, 13]]) {
-      const { x, y } = tileToWorld(col, row)
-      const w = this.wallGroup.create(x, y, null)
-      w.body.setSize(TILE, TILE)
-      w.setVisible(false)
-    }
-    // Bookshelves — 5 tiles tall at col 23 (rows 2-6 and rows 10-14)
-    for (const [col, r0, r1] of [[23, 2, 6], [23, 10, 14]]) {
-      for (let row = r0; row <= r1; row++) {
-        const { x, y } = tileToWorld(col, row)
-        const w = this.wallGroup.create(x, y, null)
-        w.body.setSize(TILE, TILE)
-        w.setVisible(false)
-      }
-    }
-    this.wallGroup.refresh()
-  }
-
-  // ── Portal door at bottom center ───────────────────────────────────────────
-
-  drawPortalDoor() {
-    const px = 12 * TILE + TILE / 2   // 400
-    const py = 16 * TILE + TILE / 2   // 528
-    const g  = this.add.graphics().setDepth(2)
-
-    g.fillStyle(0x485838)
-    g.fillRect(px - 58, py - 36, 14, 52)
-    g.lineStyle(2, 0x101010, 1)
-    g.strokeRect(px - 58, py - 36, 14, 52)
-    g.fillRect(px + 44, py - 36, 14, 52)
-    g.strokeRect(px + 44, py - 36, 14, 52)
-    g.fillStyle(0x304828)
-    g.fillRect(px - 48, py - 36, 96, 52)
-    g.fillStyle(0x0A1828)
-    g.fillRect(px - 40, py - 30, 80, 46)
-    g.fillStyle(0x1A4080, 0.5)
-    g.fillRect(px - 36, py - 26, 72, 8)
-    g.fillRect(px - 36, py - 12, 72, 8)
-    g.fillRect(px - 36, py + 2,  72, 8)
-    g.lineStyle(3, 0xD4AF37, 1)
-    g.strokeRect(px - 48, py - 36, 96, 52)
-    g.fillStyle(0x304828)
-    g.fillRect(px - 48, py - 54, 96, 24)
-    g.fillStyle(0x0A1828)
-    g.fillRect(px - 40, py - 50, 80, 20)
-    g.lineStyle(3, 0xD4AF37, 1)
-    g.strokeRect(px - 48, py - 54, 96, 24)
-  }
-
-  // ── Trigger zones (portal, archives, shop, sanctum) ────────────────────────
-
-  setupTriggerZones() {
-    const px = 12 * TILE + TILE / 2
-    const py = 16 * TILE + TILE / 2
-    this.portalBounds = new Phaser.Geom.Rectangle(px - 40, py - 10, 80, 30)
-    this.add.text(px, py + 24, 'WORLD MAP', {
-      fontSize: '10px', color: '#D4AF37', fontFamily: 'monospace', fontStyle: 'bold',
-    }).setOrigin(0.5, 0).setDepth(3)
-
-    this.leftPassageBounds = new Phaser.Geom.Rectangle(0, 8 * TILE, TILE, 3 * TILE)
-    this.shopBounds = new Phaser.Geom.Rectangle(600, 185, 112, 45)
-
-    this.sanctumBounds = new Phaser.Geom.Rectangle(344, 0, 96, 56)
-    this.add.text(400, 4, '✦', {
-      fontSize: '10px', color: '#D4AF3744', fontFamily: 'monospace',
-    }).setOrigin(0.5, 0).setDepth(3)
   }
 
   // ── Player ─────────────────────────────────────────────────────────────────
 
   createPlayer() {
-    const startX = Math.floor(COLS / 2) * TILE + TILE / 2  // col 12, x=400
-    const startY = 14 * TILE + TILE / 2                     // row 14 — clear floor below fountain
-    this.player = this.physics.add.sprite(startX, startY, 'player')
-    setupPlayerBody(this.player)
-    this._bumpCooldown = 0
-    this.physics.add.collider(this.player, this.wallGroup, () => SoundEngine.bump())
+    const pos = this.iso.gridToScreen(this.playerGrid.col, this.playerGrid.row)
+    this.playerSprite = this.add.sprite(pos.x, pos.y, 'player').setOrigin(0.5, 1)
+    const psrc = this.textures.get('player').getSourceImage()
+    if (psrc && psrc.height > 0) this.playerSprite.setDisplaySize(psrc.width * 64 / psrc.height, 64)
+    this.playerSprite.setDepth(this.iso.getDepth(this.playerGrid.col, this.playerGrid.row) + 1)
   }
 
   // ── NPCs ───────────────────────────────────────────────────────────────────
 
   createNPCs() {
     this.npcs = []
-    this.npcGroup = this.physics.add.group()
     for (const def of NPC_DEFS) {
-      const x = def.tileX * TILE + TILE / 2
-      const y = def.tileY * TILE + TILE / 2
-      const sprite = this.physics.add.sprite(x, y, def.texture)
-      setupNPCBody(sprite)
-      this.physics.add.collider(this.player, sprite)
+      const pos = this.iso.gridToScreen(def.col, def.row)
+      const sprite = this.add.sprite(pos.x, pos.y, def.texture).setOrigin(0.5, 1)
+      const src = this.textures.get(def.texture).getSourceImage()
+      if (src && src.height > 0) sprite.setDisplaySize(src.width * 64 / src.height, 64)
+      sprite.setDepth(this.iso.getDepth(def.col, def.row) + 1)
       this.npcs.push({ def, sprite })
     }
   }
 
   startNPCBehaviors() {
-    const maxY = 16 * TILE
     for (const npc of this.npcs) {
       if (npc.def.key === 'white-scholar') {
         this.tweens.add({
-          targets: npc.sprite,
-          y: Math.min(npc.def.tileY * TILE + TILE / 2 + 3 * TILE, maxY),
-          duration: 3500, ease: 'Linear', yoyo: true, repeat: -1, hold: 1500,
+          targets: npc.sprite, y: npc.sprite.y - 4,
+          duration: 800, ease: 'Sine.easeInOut', yoyo: true, repeat: -1,
         })
       } else if (npc.def.key === 'practice-duelist') {
         this.tweens.add({
@@ -375,7 +257,7 @@ export default class HubScene extends Phaser.Scene {
         })
       } else if (npc.def.key === 'green-ranger') {
         this.tweens.add({
-          targets: npc.sprite, x: npc.sprite.x + 6,
+          targets: npc.sprite, x: npc.sprite.x + 5,
           duration: 1200, ease: 'Sine.easeInOut', yoyo: true, repeat: -1,
         })
       }
@@ -385,11 +267,14 @@ export default class HubScene extends Phaser.Scene {
   // ── Camera ─────────────────────────────────────────────────────────────────
 
   setupCamera() {
-    const mapW = COLS * TILE, mapH = ROWS * TILE
-    this.physics.world.setBounds(0, 0, mapW, mapH)
-    this.cameras.main.setBounds(0, 0, mapW, mapH)
-    this.cameras.main.startFollow(this.player, true, 0.1, 0.1)
-    this.cameras.main.setBackgroundColor(0x6A4A28)
+    const bounds = this.iso.getMapScreenBounds()
+    this.cameras.main.setBounds(
+      bounds.left, bounds.top,
+      bounds.right - bounds.left,
+      bounds.bottom - bounds.top
+    )
+    this.cameras.main.startFollow(this.playerSprite, true, 0.08, 0.08)
+    this.cameras.main.setBackgroundColor(0x1A1A2E)
   }
 
   // ── Input ──────────────────────────────────────────────────────────────────
@@ -412,13 +297,15 @@ export default class HubScene extends Phaser.Scene {
   // ── HUD ────────────────────────────────────────────────────────────────────
 
   createUI() {
+    const sw = this.scale.width
+
     const barBg = this.add.graphics().setScrollFactor(0).setDepth(20)
     barBg.fillStyle(0x0A111E)
-    barBg.fillRect(0, 0, COLS * TILE, 32)
+    barBg.fillRect(0, 0, sw, 32)
     barBg.lineStyle(1, 0x503810, 1)
-    barBg.lineBetween(0, 31, COLS * TILE, 31)
+    barBg.lineBetween(0, 31, sw, 31)
     barBg.lineStyle(1, 0xD4AF37, 1)
-    barBg.lineBetween(0, 32, COLS * TILE, 32)
+    barBg.lineBetween(0, 32, sw, 32)
 
     const tokenBg = this.add.graphics().setScrollFactor(0).setDepth(21)
     tokenBg.fillStyle(0x0A111E)
@@ -434,15 +321,16 @@ export default class HubScene extends Phaser.Scene {
     this.promptLabel = this.add.text(0, 0, '[E] Talk', {
       fontSize: '10px', color: '#101010', fontFamily: 'monospace', fontStyle: 'bold',
       backgroundColor: '#F0EED8', padding: { x: 5, y: 2 },
-    }).setDepth(30).setVisible(false)
+    }).setDepth(300).setVisible(false)
 
     this._drawCompassRose()
     this.drawMinimap()
   }
 
   _drawCompassRose() {
+    const sh = this.scale.height
     const CR = this.add.graphics().setScrollFactor(0).setDepth(28)
-    const crx = 24, cry = 552, R = 18
+    const crx = 24, cry = sh - 24, R = 18
     CR.fillStyle(0x060C18, 0.9)
     CR.fillCircle(crx, cry, R + 4)
     CR.lineStyle(1, 0xD4AF37, 0.9)
@@ -453,10 +341,10 @@ export default class HubScene extends Phaser.Scene {
       const ey = cry + Math.round(R * Math.sin(rad))
       const lx = crx + Math.round(5 * Math.cos(rad + Math.PI / 2))
       const ly = cry + Math.round(5 * Math.sin(rad + Math.PI / 2))
-      const rx = crx + Math.round(5 * Math.cos(rad - Math.PI / 2))
-      const ry = cry + Math.round(5 * Math.sin(rad - Math.PI / 2))
+      const rx2 = crx + Math.round(5 * Math.cos(rad - Math.PI / 2))
+      const ry2 = cry + Math.round(5 * Math.sin(rad - Math.PI / 2))
       CR.fillStyle(isNorth ? 0xD4AF37 : 0x5A6070)
-      CR.fillTriangle(lx, ly, rx, ry, ex, ey)
+      CR.fillTriangle(lx, ly, rx2, ry2, ex, ey)
     }
     CR.fillStyle(0xD4AF37)
     CR.fillCircle(crx, cry, 3)
@@ -476,26 +364,30 @@ export default class HubScene extends Phaser.Scene {
   }
 
   drawMinimap() {
+    const sw = this.scale.width
     const MM_W = 90, MM_H = 90
-    const MM_X = COLS * TILE - MM_W - 4, MM_Y = 2
-    const SW = Math.floor(MM_W / COLS), SH = Math.floor(MM_H / ROWS)
+    const MM_X = sw - MM_W - 4, MM_Y = 2
+    const SW = Math.floor(MM_W / MAP_COLS), SH = Math.floor(MM_H / MAP_ROWS)
     const g = this.add.graphics().setScrollFactor(0).setDepth(28)
     g.fillStyle(0x060C18, 0.92)
     g.fillRect(MM_X - 2, MM_Y, MM_W + 4, MM_H + 4)
     g.lineStyle(1, 0xD4AF37, 0.9)
     g.strokeRect(MM_X - 2, MM_Y, MM_W + 4, MM_H + 4)
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) {
-        const ch = MAP[r]?.[c] ?? 'W'
-        g.fillStyle(ch === 'W' ? 0x5A4830 : 0xC4A265, ch === 'W' ? 1 : 0.75)
+    for (let r = 0; r < MAP_ROWS; r++) {
+      for (let c = 0; c < MAP_COLS; c++) {
+        const t = HUB_MAP[r]?.[c] ?? TILE.VOID
+        const color = t === TILE.WALL ? 0x5A4830
+          : t === TILE.WATER ? 0x2B5B95
+          : t === TILE.GRASS || t === TILE.FOUNTAIN ? 0x4A7A3D
+          : t === TILE.DOOR ? 0xD4AF37
+          : 0xC4A265
+        g.fillStyle(color, t === TILE.WALL ? 1 : 0.75)
         g.fillRect(MM_X + c * SW, MM_Y + 2 + r * SH, SW, SH)
       }
     }
-    g.fillStyle(0x37D3C4)
-    g.fillRect(MM_X + 12 * SW - 1, MM_Y + 2 + 17 * SH, SW + 2, SH)
     for (const npc of this.npcs) {
       g.fillStyle(npc.def.tabColor)
-      g.fillRect(MM_X + npc.def.tileX * SW, MM_Y + 2 + npc.def.tileY * SH,
+      g.fillRect(MM_X + npc.def.col * SW, MM_Y + 2 + npc.def.row * SH,
         Math.max(2, SW - 1), Math.max(2, SH - 1))
     }
     this.add.text(MM_X + MM_W / 2, MM_Y - 12, 'MAP', {
@@ -507,9 +399,9 @@ export default class HubScene extends Phaser.Scene {
   }
 
   updateMinimap() {
-    if (!this.minimapPlayerDot || !this.player || !this._mmX) return
-    const px = this._mmX + Math.floor(this.player.x / TILE) * this._mmSW
-    const py = this._mmY + 2 + Math.floor(this.player.y / TILE) * this._mmSH
+    if (!this.minimapPlayerDot) return
+    const px = this._mmX + this.playerGrid.col * this._mmSW
+    const py = this._mmY + 2 + this.playerGrid.row * this._mmSH
     this.minimapPlayerDot.clear()
     this.minimapPlayerDot.fillStyle(0xFFD700)
     this.minimapPlayerDot.fillRect(px, py, this._mmSW + 1, this._mmSH + 1)
@@ -519,12 +411,13 @@ export default class HubScene extends Phaser.Scene {
 
   openDialog(npc) {
     if (this.dialogState) return
-    const camX = this.cameras.main.scrollX, camY = this.cameras.main.scrollY
-    const BOX_X = camX + 20, BOX_Y = camY + 414
-    const BOX_W = COLS * TILE - 40, BOX_H = 150
+    const sw = this.scale.width, sh = this.scale.height
+    const BOX_X = 20, BOX_Y = sh - 174
+    const BOX_W = sw - 40, BOX_H = 150
     const PORT_W = 70
     const TEXT_X = BOX_X + PORT_W + 22, TEXT_W = BOX_W - PORT_W - 30
-    const bg = this.add.graphics().setDepth(50)
+
+    const bg = this.add.graphics().setDepth(50).setScrollFactor(0)
     bg.fillStyle(0xFEFAF0)
     bg.fillRoundedRect(BOX_X, BOX_Y, BOX_W, BOX_H, 8)
     bg.lineStyle(3, 0x2A1808, 1)
@@ -540,19 +433,22 @@ export default class HubScene extends Phaser.Scene {
     bg.fillRoundedRect(BOX_X + 8, BOX_Y + 8, PORT_W, BOX_H - 16, 6)
     bg.lineStyle(1, 0x9A8060, 0.7)
     bg.strokeRoundedRect(BOX_X + 8, BOX_Y + 8, PORT_W, BOX_H - 16, 6)
-    const portrait = this.add.sprite(BOX_X + PORT_W / 2 + 8, BOX_Y + BOX_H / 2, npc.def.texture).setDepth(52)
+
+    const portrait = this.add.sprite(BOX_X + PORT_W / 2 + 8, BOX_Y + BOX_H / 2, npc.def.texture)
+      .setDepth(52).setScrollFactor(0)
     portrait.setScale(56 / portrait.width)
     const nameText = this.add.text(BOX_X + 16, BOX_Y - 14, npc.def.name, {
       fontSize: '12px', color: '#FFFFFF', fontFamily: '"Arial", sans-serif',
       fontStyle: 'bold', stroke: '#2A1808', strokeThickness: 2,
-    }).setDepth(53)
+    }).setDepth(53).setScrollFactor(0)
     const bodyText = this.add.text(TEXT_X, BOX_Y + 20, '', {
       fontSize: '13px', color: '#18100A', fontFamily: '"Arial", sans-serif',
       wordWrap: { width: TEXT_W }, lineSpacing: 5,
-    }).setDepth(52)
+    }).setDepth(52).setScrollFactor(0)
     const hint = this.add.text(BOX_X + TEXT_W + 10, BOX_Y + BOX_H - 12, '[E] ▼', {
       fontSize: '11px', color: '#806040', fontFamily: '"Arial", sans-serif',
-    }).setOrigin(1, 1).setDepth(52)
+    }).setOrigin(1, 1).setDepth(52).setScrollFactor(0)
+
     this.dialogState = { npc, pageIndex: 0, bg, nameText, bodyText, hint, portrait }
     this.showDialogPage(0)
   }
@@ -589,112 +485,132 @@ export default class HubScene extends Phaser.Scene {
     this.dialogState = null
   }
 
-  // ── Input ──────────────────────────────────────────────────────────────────
+  // ── Input handlers ─────────────────────────────────────────────────────────
 
   onEPress() {
     if (this.dialogState) { this.advanceDialog(); return }
     const nearby = this.getNearbyNPC()
     if (nearby) { this.openDialog(nearby); return }
-    if (this.isNearShop()) this.game.events.emit('shopOpen')
   }
 
-  isNearShop() {
-    return this.shopBounds?.contains(this.player.x, this.player.y) ?? false
+  // ── Movement (grid-based) ──────────────────────────────────────────────────
+
+  isNPCAt(col, row) {
+    return this.npcs.some(n => n.def.col === col && n.def.row === row)
   }
 
   getNearbyNPC() {
-    const { x: px, y: py } = this.player
+    const { col: pc, row: pr } = this.playerGrid
     for (const npc of this.npcs) {
-      const dx = npc.sprite.x - px, dy = npc.sprite.y - py
-      if (dx * dx + dy * dy < 52 * 52) return npc
+      const dc = Math.abs(npc.def.col - pc)
+      const dr = Math.abs(npc.def.row - pr)
+      if (dc <= 1 && dr <= 1 && (dc + dr) > 0) return npc
     }
     return null
   }
 
-  // ── Update loop ────────────────────────────────────────────────────────────
-
-  update() {
-    if (!this.player) return
-    this.handleMovement()
-    this.updateNPCPrompts()
-    this.checkPortalOverlap()
-    this.checkPassages()
-    this.checkSanctumEntrance()
-    this.updateStats()
-    this.updateMinimap()
-    updateDirectionIndicator(this.dirIndicator, this.player)
+  movePlayer(newCol, newRow) {
+    this.isMoving = true
+    this.playerGrid.col = newCol
+    this.playerGrid.row = newRow
+    const pos = this.iso.gridToScreen(newCol, newRow)
+    const newDepth = this.iso.getDepth(newCol, newRow) + 1
+    this.tweens.add({
+      targets: this.playerSprite,
+      x: pos.x, y: pos.y,
+      duration: 160, ease: 'Linear',
+      onUpdate: () => this.playerSprite.setDepth(newDepth),
+      onComplete: () => {
+        this.isMoving = false
+        this.checkPortal(newCol, newRow)
+      },
+    })
   }
 
-  handleMovement() {
-    if (this.dialogState || this.transitioning) {
-      this.player.setVelocity(0, 0); return
+  // ── Portal / scene transitions ─────────────────────────────────────────────
+
+  checkPortal(col, row) {
+    if (this.transitioning || this.dialogState) return
+    const tileType = this.iso.getTile(col, row)
+    if (tileType !== TILE.DOOR) return
+
+    if (row === MAP_ROWS - 1)        this._doTransition('WorldMap', [16, 48, 88])
+    else if (row === 0)              this._checkSanctum()
+    else if (col === 0)              this._doTransition('Archives', [16, 48, 88])
+  }
+
+  _doTransition(sceneKey, fadeColor = [16, 48, 88]) {
+    this.transitioning = true
+    SoundEngine.sceneTransition()
+    this.cameras.main.fadeOut(400, ...fadeColor)
+    this.cameras.main.once('camerafadeoutcomplete', () => {
+      SoundEngine.stopBGM()
+      this.scene.start(sceneKey)
+    })
+  }
+
+  _checkSanctum() {
+    const seals = this.registry.get('seals') ?? []
+    if (seals.length >= 5) {
+      this._doTransition('Sanctum', [4, 2, 8])
+    } else if (!this._sanctumHintShown) {
+      this._sanctumHintShown = true
+      const sw = this.scale.width
+      const hint = this.add.text(sw / 2, 48,
+        '✦  The vault is sealed. Defeat all five Archmages first.  ✦', {
+        fontSize: '10px', color: '#D4AF37', fontFamily: 'Courier New, monospace',
+        backgroundColor: '#0A0420', padding: { x: 8, y: 4 },
+      }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(60)
+      this.time.delayedCall(3000, () => {
+        if (hint?.active) hint.destroy()
+        this._sanctumHintShown = false
+      })
     }
-    handleMovement(this.player, this.cursors, this.wasd, this.dirIndicator)
   }
+
+  // ── NPC prompt label ───────────────────────────────────────────────────────
 
   updateNPCPrompts() {
     const nearby = this.getNearbyNPC()
     if (nearby && !this.dialogState) {
-      const label = nearby.def.battle ? '[E] Duel' : nearby.def.shop ? '[E] Shop' : nearby.def.rest ? '[E] Rest' : '[E] Talk'
+      const label = nearby.def.battle ? '[E] Duel'
+        : nearby.def.shop ? '[E] Shop'
+        : nearby.def.rest ? '[E] Rest'
+        : '[E] Talk'
       this.promptLabel.setText(label).setVisible(true)
-        .setPosition(nearby.sprite.x - this.promptLabel.width / 2, nearby.sprite.y - 36)
-    } else if (this.isNearShop() && !this.dialogState) {
-      this.promptLabel.setText('[E] Shop').setVisible(true)
-        .setPosition(648 - this.promptLabel.width / 2, 172)
-    } else if (this.leftPassageBounds?.contains(this.player.x, this.player.y) && !this.dialogState) {
-      this.promptLabel.setText('[← Archives]').setVisible(true)
-        .setPosition(48, 302 - this.promptLabel.height / 2)
+        .setPosition(nearby.sprite.x - this.promptLabel.width / 2, nearby.sprite.y - 56)
     } else {
       this.promptLabel.setVisible(false)
     }
   }
 
-  checkPassages() {
-    if (this.dialogState || this.transitioning) return
-    if (this.leftPassageBounds?.contains(this.player.x, this.player.y)) {
-      this.transitioning = true
-      this.player.setVelocity(0, 0)
-      SoundEngine.sceneTransition()
-      this.cameras.main.fadeOut(400, 16, 48, 88)
-      this.cameras.main.once('camerafadeoutcomplete', () => {
-        SoundEngine.stopBGM(); this.scene.start('Archives')
-      })
-    }
-  }
+  // ── Update loop ────────────────────────────────────────────────────────────
 
-  checkSanctumEntrance() {
-    if (this.dialogState || this.transitioning) return
-    if (!this.sanctumBounds?.contains(this.player.x, this.player.y)) return
-    const seals = this.registry.get('seals') ?? []
-    if (seals.length >= 5) {
-      this.transitioning = true
-      this.player.setVelocity(0, 0)
-      SoundEngine.sceneTransition()
-      this.cameras.main.fadeOut(500, 4, 2, 8)
-      this.cameras.main.once('camerafadeoutcomplete', () => {
-        SoundEngine.stopBGM(); this.scene.start('Sanctum')
-      })
-    } else if (!this._sanctumHintShown) {
-      this._sanctumHintShown = true
-      const hint = this.add.text(400, 48,
-        '✦  The vault is sealed. Defeat all five Archmages first.  ✦', {
-        fontSize: '10px', color: '#D4AF37', fontFamily: 'Courier New, monospace',
-        backgroundColor: '#0A0420', padding: { x: 8, y: 4 },
-      }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(60)
-      this.time.delayedCall(3000, () => { if (hint?.active) hint.destroy(); this._sanctumHintShown = false })
-    }
-  }
+  update() {
+    if (this.transitioning) return
 
-  checkPortalOverlap() {
-    if (this.dialogState || this.transitioning) return
-    if (this.portalBounds?.contains(this.player.x, this.player.y)) {
-      this.transitioning = true
-      this.player.setVelocity(0, 0)
-      SoundEngine.sceneTransition()
-      this.cameras.main.fadeOut(500, 16, 48, 88)
-      this.cameras.main.once('camerafadeoutcomplete', () => {
-        SoundEngine.stopBGM(); this.scene.start('WorldMap')
-      })
+    if (!this.isMoving && !this.dialogState) {
+      const JD = Phaser.Input.Keyboard.JustDown
+      let dc = 0, dr = 0
+
+      if      (JD(this.cursors.up)    || JD(this.wasd.up))    dr = -1
+      else if (JD(this.cursors.down)  || JD(this.wasd.down))  dr =  1
+      else if (JD(this.cursors.left)  || JD(this.wasd.left))  dc = -1
+      else if (JD(this.cursors.right) || JD(this.wasd.right)) dc =  1
+
+      if (dc !== 0 || dr !== 0) {
+        const nc = this.playerGrid.col + dc
+        const nr = this.playerGrid.row + dr
+        if (this.iso.isWalkable(nc, nr) && !this.isNPCAt(nc, nr)) {
+          this.movePlayer(nc, nr)
+        } else {
+          SoundEngine.bump()
+        }
+      }
     }
+
+    this.updateNPCPrompts()
+    this.updateStats()
+    this.updateMinimap()
   }
 }

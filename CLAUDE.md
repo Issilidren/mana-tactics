@@ -84,8 +84,16 @@ src/lib/cardUtils.js                — shared FRAME palette + artUrl() — impo
 - Sprites are real-artwork PNGs with transparent backgrounds; sizes vary (portraits ~880-944×1200-1380px)
 - **Extract spritesheet** (player + hub/archives/club NPCs): `python3 scripts/extract_sprites.py` — slices `mana_tactics_character_sprites.png` from Downloads into 9 sprites with background removal + tight-crop; skips ironclad (protected)
 - **Process individual NPCs** (librarian, color NPCs, merchant, caretaker): `python3 scripts/copy_individual_npcs.py` — reads 8 card PNGs from Downloads, removes cream background, crops label, tight-crops
+- **Player sprite** (`public/assets/sprites/player.png`): full-body chibi extracted from `rival-student-sheet.png` (768×1024, 5 cols, 8 rows, 128px row height) — Row 1 idle, first frame at x=140, y=0, w=140, h=128; BFS flood-fill THRESH=45 + global near-neutral sweep (min_ch=225, max_var=18); 4px transparent padding added; final 148×132
+- **Sprite background removal**: two-pass pipeline — BFS flood-fill from edges (catches open background) + global near-neutral sweep (catches enclosed pixels inside dark outlines). Applied to all student sprites, caretaker, librarian, merchant, gemini this session (2026-06-27)
 - Tight-crop uses Pillow `getbbox()` after `remove_background()` — strips all transparent padding so sprites sit flush on tiles
 - **CRITICAL**: Do NOT use or copy assets from `C:\Users\Kenny\Downloads\CelestialShaman_v8_PATCHED\` — that is a completely separate project and is off limits
+- **Extract academy tileset sprites**: `python3 scripts/extract_tiles.py` (skips existing) / `--force` re-extracts all
+  - Source of truth for tile coordinates: `scripts/tileset_manifest.py` — add one dict entry to add a new tile
+  - Tileset: `C:\Users\Kenny\Downloads\academy-tileset-v1.png` (1024×1024, bg=rgb(233,233,234), BG_THRESH=55)
+  - Floor tiles: tight 2:1 diamond crop (y=87, h=84). Tall tiles: full height crop from y=255/540/780.
+  - 20 tiles currently extracted: 6 floors, 5 walls/doors, 5 props (row 3), 4 large props (row 4)
+  - Output: `public/assets/tiles/tile-*.png` — each file name = Phaser image key base
 
 ## FFTA Extended Tileset (2026-06-25)
 16 new 64×64 tile PNGs in `public/assets/tiles/` — preloaded in BootScene with these Phaser keys:
@@ -217,10 +225,10 @@ When fetched via API it arrives as a JS object — `getManaCost()` sums all valu
 - Clicking locked region: `showLockMessage(neededColor)` — 2.2s timed overlay, "Earn the WHITE seal first!"
 - Re-checks registry live so unlocks immediately after winning
 
-## UI — Login Screen (2026-06-26)
+## UI — Login Screen (2026-06-27)
 - Background: `public/assets/login-bg.png` — original pixel art scene (MANA TACTICS title, academy courtyard, guild banners)
 - The original image had a pixel art login panel baked in; it was blanked with Python/Pillow (`rgb(8,5,16)` rect at x=34–70%, y=31–78%)
-- React panel sits exactly over the blanked area: `position:absolute, left:34%, top:31%, width:36%, height:47%`
+- React panel sits exactly over the blanked area: `position:absolute, left:29%, top:29%, width:41%, height:50%`
 - Panel background: `rgb(8,5,16)` fully opaque — matches the painted blank area
 - `backgroundSize: '100% 100%'` — do NOT change to `cover`, it breaks % positioning
 - To reposition: adjust BOTH the Python rect coordinates AND the Login.jsx panel percentages together
@@ -320,6 +328,24 @@ Scripts live at `C:\Users\Kenny\write_*.py`
 - Booster pack collection save: moved from axios (broken `Prefer` header) to Supabase JS client; purchases log made fire-and-forget; `collectionVersion` increment moved to `finally` so deck builder always refreshes (2026-06-26)
 - `fetchAllCards` now shows all 320 cards always with `_owned` badge — previous filter-by-ownership caused invisible cards whenever `player_cards` had any rows but IDs didn't match (2026-06-26)
 - `handleStarterPicked` player_cards upsert switched to Supabase JS client for consistency (2026-06-26)
+- Alumni sprites appearing in clubs/hub — `npc-chronicler`, `npc-archivist`, `npc-tactician`, `npc-ironclad` removed from ClubScene and HubScene entirely; replaced with student sprites (2026-06-27)
+- Club NPCs visually embedded in wall art — left-side col:2-3 clipped into bookshelves; fixed by enforcing col:4 minimum left / col:11 maximum right for all clubs (2026-06-27)
+- Player half-bust replaced with full-body chibi — extracted Row 1 idle frame from rival-student-sheet.png; BFS + global sweep removed gray background box (2026-06-27)
+- Residual gray/white artifact boxes on student sprites — global near-neutral sweep (min_ch=225, max_var=18) removed enclosed background pixels missed by BFS; applied to all student sprites and card-art portraits (2026-06-27)
+- Login panel slightly off — adjusted to `left:29%, top:29%, width:41%, height:50%` (was 34/31/36/47) (2026-06-27)
+
+## Club & Hub NPC Rules (2026-06-27)
+- **Alumni sprites are Sanctum-only**: `npc-chronicler`, `npc-archivist`, `npc-tactician`, `npc-ironclad` must ONLY appear in `SanctumScene.js`. Do NOT place them in ClubScene or HubScene.
+- All club member NPCs use student sprites: `npc-fire-student`, `npc-earth-student`, `npc-wind-student`, `npc-water-student`, `npc-shadow-student`
+- **Club NPC wall-clearance rule**: left-side members col:4 minimum, right-side members col:11 maximum — avoids visual clipping with bookshelf art at col:1-3 and col:12-14
+- Club member final positions (flat grid 16×12, TILE=50px):
+  - ClubWhite: fire@(4,5), water@(11,5), earth@(4,8), shadow@(11,8), wind@(7,10)
+  - ClubBlue: fire@(4,5), water@(11,5), shadow@(4,8), wind@(11,8), earth@(5,10), fire@(10,10)
+  - ClubBlack: shadow@(4,6), wind@(11,6), fire@(4,9), water@(11,9)
+  - ClubRed: fire@(4,5), wind@(11,5), water@(5,7), earth@(10,7), fire@(4,10), shadow@(11,10)
+  - ClubGreen: earth@(4,5), wind@(11,5), fire@(4,8), water@(11,8), earth@(4,10), shadow@(11,10)
+  - Archmages: col:7, row:2 in all clubs
+- HubScene `practice-duelist` NPC uses `npc-wind-student` (was `npc-ironclad`)
 
 ## Postgame — The Legendary Alumni (The Triad)
 Unlocks after player collects all 5 Archmage Seals. Full spec in `docs/Mana_Tactics_Legendary_Alumni_Handoff.md`.

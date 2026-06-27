@@ -98,8 +98,8 @@ export default function Login() {
       {/* Login panel — positioned over the painted box area in the background */}
       <div style={{
         position: 'absolute',
-        left: '34%', top: '31%',
-        width: '36%', height: '47%',
+        left: '29%', top: '29%',
+        width: '41%', height: '50%',
         zIndex: 2,
         background: 'rgb(8,5,16)',
         border: '2px solid #D4AF37',
