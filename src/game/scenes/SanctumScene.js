@@ -35,7 +35,7 @@ const NPC_DEFS = [
   {
     key: 'tasklet',
     texture: 'npc-tasklet',
-    tileX: 6, tileY: 8,
+    tileX: 6, tileY: 11,
     tabColor: 0x1A9060,
     name: 'Archon Tasklet',
     dialog: [
@@ -49,7 +49,7 @@ const NPC_DEFS = [
   {
     key: 'gemini',
     texture: 'npc-gemini',
-    tileX: 12, tileY: 5,
+    tileX: 12, tileY: 11,
     tabColor: 0x4444BB,
     name: 'Sage Gemini',
     dialog: [
@@ -63,7 +63,7 @@ const NPC_DEFS = [
   {
     key: 'claude',
     texture: 'npc-claude',
-    tileX: 18, tileY: 8,
+    tileX: 18, tileY: 11,
     tabColor: 0xCC6010,
     name: 'Artificer Claude',
     dialog: [
@@ -125,11 +125,11 @@ export default class SanctumScene extends Phaser.Scene {
       }
     }
 
-    // Exit trigger at bottom-center gap (back to Hub)
-    this.exitBounds = new Phaser.Geom.Rectangle(344, 17 * TILE, 96, TILE + 8)
+    // Exit trigger at bottom-center gap (back to Hub) — raised 30px so player reaches it before world bound
+    this.exitBounds = new Phaser.Geom.Rectangle(344, 16 * TILE, 96, TILE + 40)
 
-    // "← HUB" label above exit
-    this.add.text(400, 17 * TILE - 2, '↓ HUB', {
+    // "↓ HUB" label above exit
+    this.add.text(400, 16 * TILE - 2, '↓ HUB', {
       fontSize: '10px', color: '#D4AF37',
       fontFamily: 'monospace', fontStyle: 'bold',
     }).setOrigin(0.5, 1).setDepth(3)
@@ -139,33 +139,6 @@ export default class SanctumScene extends Phaser.Scene {
 
   drawVaultDecor() {
     const g = this.add.graphics().setDepth(2)
-
-    // Central seal mosaic on floor — gold ring with 5 star points
-    const cx = 12 * TILE + TILE / 2   // 400
-    const cy = 11 * TILE + TILE / 2   // 368
-
-    g.fillStyle(0x000000, 0.22)
-    g.fillEllipse(cx + 3, cy + 3, 88, 24)
-
-    g.lineStyle(2, 0xD4AF37, 0.7)
-    g.strokeCircle(cx, cy, 42)
-    g.lineStyle(1, 0xA88860, 0.4)
-    g.strokeCircle(cx, cy, 36)
-
-    g.fillStyle(0xD4AF37, 0.2)
-    g.fillCircle(cx, cy, 36)
-
-    // 5-point star (each point corresponds to a seal)
-    for (let i = 0; i < 5; i++) {
-      const a = (i / 5) * Math.PI * 2 - Math.PI / 2
-      const ox = cx + Math.cos(a) * 34
-      const oy = cy + Math.sin(a) * 34
-      g.fillStyle(0xFFD700, 0.85)
-      g.fillCircle(ox, oy, 5)
-    }
-
-    g.fillStyle(0xFFD700, 0.5)
-    g.fillCircle(cx, cy, 10)
 
     // Three NPC drop shadows — painted before NPCs are created
     for (const def of NPC_DEFS) {
@@ -197,6 +170,7 @@ export default class SanctumScene extends Phaser.Scene {
       const x = def.tileX * TILE + TILE / 2
       const y = def.tileY * TILE + TILE / 2
       const sprite = this.physics.add.sprite(x, y, def.texture)
+      sprite.setAlpha(0)  // background art shows the champions; live sprites are invisible interaction zones
       setupNPCBody(sprite)
       this.physics.add.collider(this.player, sprite)
       this.npcs.push({ def, sprite })

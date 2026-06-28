@@ -9,6 +9,7 @@ MTG x Final Fantasy Tactics deck builder + Phaser RPG. Two layers:
 - **Always work on `dev` branch** — never commit directly to `main`
 - `main` = stable snapshots only, merged from dev via PR
 - Remote: `github.com/Issilidren/mana-tactics`
+- `past-versions/` — old zips and broken Desktop copies stored here for reference; gitignored, never pushed
 
 ## npm / WSL Split — IMPORTANT
 Running `npm install` from Windows and WSL installs different native Rollup binaries — they conflict.
@@ -318,6 +319,8 @@ Scripts live at `C:\Users\Kenny\write_*.py`
 - Sprite squishing — `setDisplaySize(w,h)` forced wrong aspect ratio on real-artwork sprites; replaced with `setScale(targetH / sprite.height)` across all 4 scenes (HubScene, ClubScene, ArchivesScene, SanctumScene): player 72px tall, NPCs 64px, dialog portraits 56px wide
 - Floating sprites — extracted sprites had 0–93px of transparent padding at top; Pillow `getbbox()` tight-crop strips it in both `extract_sprites.py` and `copy_individual_npcs.py`
 - Login auth guard — Supabase persists session in localStorage so authenticated users saw the login form on every revisit; added `if (!loading && user) return <Navigate to="/game" replace />` in Login.jsx
+- Login skipping login screen entirely — Supabase JS client was restoring a cached token from localStorage on every page load; fixed by (a) passing `{ auth: { persistSession: false } }` to `createClient` in `supabase.js` and (b) replacing `getSession()` restore in `AuthContext.jsx` with `supabase.auth.signOut()` on mount — app now always starts unauthenticated and requires login every session (2026-06-28)
+- Sanctum exit unreachable — `exitBounds` started at `y = 17 * TILE = 544`, exactly the player's maximum reachable y (world height 576 − body bottom offset 32); player could never trigger it; raised bounds to `y = 16 * TILE = 512` with height `TILE + 40` so trigger zone extends from y=512 to y=584 — player reliably exits walking south (2026-06-28)
 - Refresh-to-intro — refreshing while in-game replayed the TitleScene "press any key" intro; BootScene now checks `localStorage.getItem('mt_starter')` and routes returning players directly to HubScene
 - Triad decks missing — SanctumScene fell back to single-color decks; added `triad-tasklet` (Blue/Black control), `triad-gemini` (White/Blue/Green value), `triad-claude` (Red/Black/Green toolbox) to `aiDecks.js` with 25 new multi-color cards (2026-06-26)
 - `Login.jsx` had `SoundEngine.playSFX('confirm')` etc. — replaced all 6 calls with direct method calls (`SoundEngine.confirm()`, `SoundEngine.error()`, `SoundEngine.openMenu()`, `SoundEngine.closeMenu()`) — login now works (2026-06-26)

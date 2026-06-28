@@ -47,3 +47,6 @@ scratch/
 _draft_*
 *.prototype.js
 *.prototype.jsx
+
+# Old/broken project versions — local reference only
+past-versions/

@@ -67,7 +67,7 @@ export default class WorldMapScene extends Phaser.Scene {
 
     this.drawTitlePanel()
     this.drawRegionMarkers()
-    this.drawBackButton()
+    this.drawAcademyMarker()
     this.drawSealsLegend()
     this.drawMerchant()
   }
@@ -204,26 +204,64 @@ export default class WorldMapScene extends Phaser.Scene {
     })
   }
 
-  // ── Back button ──────────────────────────────────────────────────────────────
-  drawBackButton() {
-    const bx = 60, by = 30
-    const g = this.add.graphics().setDepth(10)
-    g.fillStyle(0x06090F, 0.92)
-    g.fillRoundedRect(bx - 46, by - 14, 92, 28, 6)
-    g.lineStyle(2, 0xD4AF37, 1)
-    g.strokeRoundedRect(bx - 46, by - 14, 92, 28, 6)
+  // ── Academy center marker — click crystal fountain to return to Hub ──────────
+  drawAcademyMarker() {
+    const ax = 390, ay = 315
 
-    const label = this.add.text(bx, by, '< Back to Hub', {
-      fontSize: '12px', color: '#D4AF37', fontFamily: 'serif',
-    }).setOrigin(0.5, 0.5).setDepth(11)
+    // Pulse glow ring
+    const glowRing = this.add.graphics().setDepth(4)
+    const drawGlow = (alpha) => {
+      glowRing.clear()
+      glowRing.lineStyle(10, 0xD4AF37, alpha)
+      glowRing.strokeCircle(ax, ay, 18)
+      glowRing.lineStyle(5, 0xFFE87C, alpha * 0.4)
+      glowRing.strokeCircle(ax, ay, 26)
+    }
+    drawGlow(0.45)
 
-    const btn = this.add.zone(bx, by, 92, 28).setDepth(12)
-    btn.setInteractive({ cursor: 'pointer' })
-    btn.on('pointerover', () => label.setColor('#FFFFFF'))
-    btn.on('pointerout',  () => label.setColor('#D4AF37'))
-    btn.on('pointerdown', () => {
+    // Dot
+    const dot = this.add.graphics().setDepth(5)
+    const drawDot = (hover) => {
+      dot.clear()
+      dot.fillStyle(0x06090F, 0.92)
+      dot.fillCircle(ax, ay, hover ? 14 : 12)
+      dot.lineStyle(hover ? 3 : 2, 0xD4AF37, 1)
+      dot.strokeCircle(ax, ay, hover ? 14 : 12)
+      dot.fillStyle(hover ? 0xFFFFFF : 0xFFE87C, 1)
+      dot.fillCircle(ax, ay, hover ? 7 : 5)
+    }
+    drawDot(false)
+
+    // Banner above the crystal
+    const bw = 156, bh = 38, bx = ax - bw / 2, by = ay - 62
+    const bannerG = this.add.graphics().setDepth(5)
+    bannerG.fillStyle(0x06090F, 0.9)
+    bannerG.fillRoundedRect(bx, by, bw, bh, 4)
+    bannerG.lineStyle(2, 0xD4AF37, 1)
+    bannerG.strokeRoundedRect(bx, by, bw, bh, 4)
+    bannerG.lineStyle(1, 0xD4AF37, 0.5)
+    bannerG.lineBetween(ax, by + bh, ax, ay - 13)
+
+    this.add.text(ax, by + 7, '✦ Mana Academy ✦', {
+      fontSize: '11px', color: '#F0E8C8',
+      fontFamily: 'serif', fontStyle: 'bold',
+    }).setOrigin(0.5, 0).setDepth(6)
+
+    this.add.text(ax, by + 22, 'Return to Hub', {
+      fontSize: '9px', color: '#A09060',
+      fontFamily: 'serif', fontStyle: 'italic',
+    }).setOrigin(0.5, 0).setDepth(6)
+
+    // Hit zone
+    const hit = this.add.zone(ax, ay, 170, 80).setDepth(8)
+    hit.setInteractive({ cursor: 'pointer' })
+    hit.on('pointerover', () => { drawGlow(0.85); drawDot(true) })
+    hit.on('pointerout',  () => { drawGlow(0.45); drawDot(false) })
+    hit.on('pointerdown', () => {
       this.cameras.main.fadeOut(300, 26, 18, 8)
-      this.cameras.main.once('camerafadeoutcomplete', () => { SoundEngine.stopBGM(); this.scene.start('Hub') })
+      this.cameras.main.once('camerafadeoutcomplete', () => {
+        SoundEngine.stopBGM(); this.scene.start('Hub')
+      })
     })
   }
 

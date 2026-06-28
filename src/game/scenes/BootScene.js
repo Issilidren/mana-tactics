@@ -67,6 +67,14 @@ export default class BootScene extends Phaser.Scene {
     this.load.image('npc-gemini',  'assets/sprites/npc-gemini.png')
     this.load.image('npc-claude',  'assets/sprites/npc-claude.png')
 
+    // Academy tileset (floor + wall sprites, 1024×1024 atlas)
+    this.load.image('academy-tileset', 'assets/tiles/academy-tileset-v1.png')
+    // Individual floor + prop tile PNGs (RGBA, transparent background)
+    this.load.image('tile-stone',     'assets/tiles/tile-stone-floor.png')
+    this.load.image('tile-grass',     'assets/tiles/tile-grass-floor.png')
+    this.load.image('tile-wall-hub',  'assets/tiles/tile-wall-hub.png')
+    this.load.image('tile-bk-hub',    'assets/tiles/tile-bookshelf-hub.png')
+
     // Hub tileset sprites (IsoEngine HubScene)
     this.load.image('hub-fountain',   'assets/tiles/hub/fountain.png')
     this.load.image('hub-bookshelf',  'assets/tiles/hub/bookshelf.png')
