@@ -155,7 +155,7 @@ export default class HubScene extends Phaser.Scene {
     // the same HUB_MAP + grid math as IsoEngine, so characters walk in the right
     // spots without any tile-sprite extraction. Centered at world (400,306) to
     // cover the full IsoEngine camera bounds (-192,-12)→(992,624).
-    this.add.image(400, 306, 'hub-bg').setDepth(-2)
+    this.add.image(400, 310, 'hub-bg').setScale(800 / 1024).setDepth(-2)
 
     this._addFountainGlow(originX, originY, tw, th)
     this._addPortalLabels(sw, sh)
