@@ -239,7 +239,6 @@ export default class StarterPickScene extends Phaser.Scene {
     zone.on('pointerdown', () => {
       this.chosen = idx
       this.confirmBtn.setVisible(true)
-      this.game.events.emit('starterPicked', { ...DECKS[idx], index: idx })
     })
 
     this.panels.push({ g, deck, x, y })
@@ -284,6 +283,7 @@ export default class StarterPickScene extends Phaser.Scene {
     if (this.chosen === null) return
     const deck = DECKS[this.chosen]
     localStorage.setItem('mt_starter', deck.color)
+    this.game.events.emit('starterPicked', { color: deck.color })
 
     this.cameras.main.fadeOut(700, 13, 8, 24)
     this.cameras.main.once('camerafadeoutcomplete', () => {

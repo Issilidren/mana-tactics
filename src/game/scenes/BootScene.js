@@ -10,10 +10,38 @@ export default class BootScene extends Phaser.Scene {
   }
 
   preload() {
-    // Tiles
+    // Tiles — base set
     this.load.image('tile-floor', 'assets/tiles/floor.png')
     this.load.image('tile-wall',  'assets/tiles/wall.png')
     this.load.image('tile-door',  'assets/tiles/door.png')
+    // Tiles — FFTA extended set (16 tiles)
+    this.load.image('tile-warm-stone',    'assets/tiles/01_warm_stone_floor.png')
+    this.load.image('tile-wood-plank',    'assets/tiles/02_wood_plank_floor.png')
+    this.load.image('tile-crimson-carpet','assets/tiles/03_crimson_carpet.png')
+    this.load.image('tile-rune-stone',    'assets/tiles/04_rune_stone_floor.png')
+    this.load.image('tile-banner-wall',   'assets/tiles/05_banner_wall.png')
+    this.load.image('tile-wall-top',      'assets/tiles/06_crenellated_wall.png')
+    this.load.image('tile-arched-door',   'assets/tiles/07_arched_door.png')
+    this.load.image('tile-open-arch',     'assets/tiles/08_open_archway.png')
+    this.load.image('tile-stairs',        'assets/tiles/09_staircase.png')
+    this.load.image('tile-magic-circle',  'assets/tiles/10_magic_circle.png')
+    this.load.image('tile-water-pool',    'assets/tiles/11_water_pool.png')
+    this.load.image('tile-cobblestone',   'assets/tiles/12_mossy_cobblestone.png')
+    this.load.image('tile-void',          'assets/tiles/13_void_border.png')
+    this.load.image('tile-gold-star',     'assets/tiles/14_gold_star_floor.png')
+    this.load.image('tile-carpet-trans',  'assets/tiles/15_carpet_stone_transition.png')
+    this.load.image('tile-skylight',      'assets/tiles/16_skylight_ceiling.png')
+
+    // Background images
+    this.load.image('worldmap-bg',    'assets/worldmap-bg.png')
+    this.load.image('hub-bg',         'assets/hub-bg.png')
+    this.load.image('club-white-bg',  'assets/club-white-bg.png')
+    this.load.image('club-blue-bg',   'assets/club-blue-bg.png')
+    this.load.image('club-black-bg',  'assets/club-black-bg.png')
+    this.load.image('club-red-bg',    'assets/club-red-bg.png')
+    this.load.image('club-green-bg',  'assets/club-green-bg.png')
+    this.load.image('archives-bg',    'assets/archives-bg.png')
+    this.load.image('oracle-vault-bg','assets/oracle-vault-bg.png')
 
     // Character sprites
     this.load.image('player',        'assets/sprites/player.png')
@@ -23,9 +51,63 @@ export default class BootScene extends Phaser.Scene {
     this.load.image('npc-red',       'assets/sprites/npc-red.png')
     this.load.image('npc-green',     'assets/sprites/npc-green.png')
     this.load.image('npc-librarian', 'assets/sprites/npc-librarian.png')
+    this.load.image('npc-merchant',  'assets/sprites/npc-merchant.png')
+    this.load.image('npc-caretaker', 'assets/sprites/npc-caretaker.png')
+    this.load.image('npc-chronicler',    'assets/sprites/npc-chronicler.png')
+    this.load.image('npc-archivist-new', 'assets/sprites/npc-archivist.png')
+    this.load.image('npc-tactician',     'assets/sprites/npc-tactician.png')
+    this.load.image('npc-ironclad',      'assets/sprites/npc-ironclad.png')
+    this.load.image('npc-fire-student',  'assets/sprites/npc-fire-student.png')
+    this.load.image('npc-water-student', 'assets/sprites/npc-water-student.png')
+    this.load.image('npc-earth-student', 'assets/sprites/npc-earth-student.png')
+    this.load.image('npc-wind-student',  'assets/sprites/npc-wind-student.png')
+    this.load.image('npc-shadow-student','assets/sprites/npc-shadow-student.png')
+    // Oracle Sanctum secret champions — drop artwork PNGs here when ready
+    this.load.image('npc-tasklet', 'assets/sprites/npc-tasklet.png')
+    this.load.image('npc-gemini',  'assets/sprites/npc-gemini.png')
+    this.load.image('npc-claude',  'assets/sprites/npc-claude.png')
+
+    // Academy tileset (floor + wall sprites, 1024×1024 atlas)
+    this.load.image('academy-tileset', 'assets/tiles/academy-tileset-v1.png')
+    // Individual floor + prop tile PNGs (RGBA, transparent background)
+    this.load.image('tile-stone',     'assets/tiles/tile-stone-floor.png')
+    this.load.image('tile-grass',     'assets/tiles/tile-grass-floor.png')
+    this.load.image('tile-wall-hub',  'assets/tiles/tile-wall-hub.png')
+    this.load.image('tile-bk-hub',    'assets/tiles/tile-bookshelf-hub.png')
+
+    // Hub tileset sprites (IsoEngine HubScene)
+    this.load.image('hub-fountain',   'assets/tiles/hub/fountain.png')
+    this.load.image('hub-bookshelf',  'assets/tiles/hub/bookshelf.png')
+    this.load.image('hub-desk',       'assets/tiles/hub/desk.png')
+    this.load.image('hub-plant',      'assets/tiles/hub/plant.png')
+    this.load.image('hub-lantern',    'assets/tiles/hub/lantern.png')
+    this.load.image('hub-crystals',   'assets/tiles/hub/crystals.png')
+    this.load.image('hub-floor-stone','assets/tiles/hub/floor-stone.png')
+    this.load.image('hub-stairs',     'assets/tiles/hub/stairs.png')
+    this.load.image('hub-pedestal',   'assets/tiles/hub/pedestal.png')
+    this.load.image('hub-balustrade', 'assets/tiles/hub/balustrade.png')
+
+    // Card art illustrations
+    this.load.image('art-island',          'assets/card-art/island.png')
+    this.load.image('art-mountain',        'assets/card-art/mountain.png')
+    this.load.image('art-forest',          'assets/card-art/forest.png')
+    this.load.image('art-swamp',           'assets/card-art/swamp.png')
+    this.load.image('art-plains',          'assets/card-art/plains.png')
+    this.load.image('art-brainstorm',      'assets/card-art/brainstorm.png')
+    this.load.image('art-ponder',          'assets/card-art/ponder.png')
+    this.load.image('art-dark-ritual',     'assets/card-art/dark-ritual.png')
+    this.load.image('art-viscera-seer',    'assets/card-art/viscera-seer.png')
+    this.load.image('art-gitaxian-probe',  'assets/card-art/gitaxian-probe.png')
+    this.load.image('art-vampiric-tutor',  'assets/card-art/vampiric-tutor.png')
+    this.load.image('art-reanimate',       'assets/card-art/reanimate.png')
+    this.load.image('art-entomb',          'assets/card-art/entomb.png')
+    this.load.image('art-village-rites',   'assets/card-art/village-rites.png')
+    this.load.image('art-consider',        'assets/card-art/consider.png')
+    this.load.image('art-mystical-tutor',  'assets/card-art/mystical-tutor.png')
   }
 
   create() {
-    this.scene.start('Title')
+    // Returning players skip the title screen entirely
+    this.scene.start(localStorage.getItem('mt_starter') ? 'Hub' : 'Title')
   }
 }

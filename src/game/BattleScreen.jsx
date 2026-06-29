@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { CardEngine, getManaCost } from './systems/CardEngine.js'
 import { AIOpponent } from './systems/AIOpponent.js'
+import { SoundEngine } from './systems/SoundEngine.js'
 
 // ── PTCG-style card frame colors per MTG color ──────────────────────────────
 const CARD_FRAME = {
@@ -42,6 +43,29 @@ const ART_OVERLAY = [
   'repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.07) 3px, rgba(0,0,0,0.07) 4px)',
   'repeating-linear-gradient(90deg, transparent, transparent 3px, rgba(0,0,0,0.07) 3px, rgba(0,0,0,0.07) 4px)',
 ].join(', ')
+
+// Local illustrated card art — takes priority over gradient fallback
+const LOCAL_CARD_ART = {
+  'island':          'assets/card-art/island.png',
+  'mountain':        'assets/card-art/mountain.png',
+  'forest':          'assets/card-art/forest.png',
+  'swamp':           'assets/card-art/swamp.png',
+  'plains':          'assets/card-art/plains.png',
+  'brainstorm':      'assets/card-art/brainstorm.png',
+  'ponder':          'assets/card-art/ponder.png',
+  'dark ritual':     'assets/card-art/dark-ritual.png',
+  'viscera seer':    'assets/card-art/viscera-seer.png',
+  'gitaxian probe':  'assets/card-art/gitaxian-probe.png',
+  'vampiric tutor':  'assets/card-art/vampiric-tutor.png',
+  'reanimate':       'assets/card-art/reanimate.png',
+  'entomb':          'assets/card-art/entomb.png',
+  'village rites':   'assets/card-art/village-rites.png',
+  'consider':        'assets/card-art/consider.png',
+  'mystical tutor':  'assets/card-art/mystical-tutor.png',
+}
+function getCardArt(card) {
+  return LOCAL_CARD_ART[card?.name?.toLowerCase()] || null
+}
 
 // ── GBC Heart HP display ──────────────────────────────────────────────────────
 function LifeDots({ life, max = 10 }) {
@@ -165,15 +189,24 @@ function BattleCard({
         alignItems: 'center',
         justifyContent: 'center',
       }}>
+        {getCardArt(card) && (
+          <img
+            src={getCardArt(card)}
+            alt=""
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
+          />
+        )}
         <div style={{ position: 'absolute', inset: 0, background: ART_OVERLAY }} />
-        <span style={{
-          fontSize: size === 'hand' ? '1.3rem' : '1.5rem',
-          filter: 'drop-shadow(1px 1px 0px rgba(0,0,0,0.9))',
-          zIndex: 1,
-          lineHeight: 1,
-        }}>
-          {isCreature ? '⚔' : isLand ? '🏔' : '✨'}
-        </span>
+        {!getCardArt(card) && (
+          <span style={{
+            fontSize: size === 'hand' ? '1.3rem' : '1.5rem',
+            filter: 'drop-shadow(1px 1px 0px rgba(0,0,0,0.9))',
+            zIndex: 1,
+            lineHeight: 1,
+          }}>
+            {isCreature ? '⚔' : isLand ? '🏔' : '✨'}
+          </span>
+        )}
         {damage > 0 && (
           <div style={{
             position: 'absolute', top: 2, right: 2,
@@ -181,6 +214,14 @@ function BattleCard({
             padding: '1px 3px', fontSize: '0.48rem', color: '#fff', fontWeight: 'bold',
           }}>
             -{damage}
+          </div>
+        )}
+        {isAttacking && abilities.some(a => a.toLowerCase() === 'vigilance') && (
+          <div style={{ position: 'absolute', top: 2, left: 2,
+            background: 'rgba(210,172,55,0.9)', borderRadius: 2,
+            padding: '1px 3px', fontSize: '0.44rem', color: '#1a1a1a', fontWeight: 'bold',
+          }}>
+            ⚔ VIGIL
           </div>
         )}
       </div>
@@ -201,6 +242,28 @@ function BattleCard({
       }}>
         {card.type}{abilities.length > 0 ? ` · ${abilities[0]}` : ''}
       </div>
+
+      {/* ── Keyword pills (battlefield only) ── */}
+      {size === 'battlefield' && abilities.length > 0 && (
+        <div style={{ display: 'flex', gap: 2, padding: '1px 3px', flexWrap: 'wrap', flexShrink: 0,
+          borderBottom: `1px solid ${frame.border}22` }}>
+          {abilities.slice(0, 3).map(ab => {
+            const abLow = ab.toLowerCase().replace(/_/g, ' ')
+            const pilBg = ['trample','flying','first strike','double strike','haste','menace'].includes(abLow)
+              ? '#5C1A1A'
+              : ['lifelink','deathtouch','vigilance','indestructible'].includes(abLow)
+                ? '#1A4A1A'
+                : '#1A2A5A'
+            return (
+              <span key={ab} style={{ background: pilBg, color: '#DDD', fontSize: '0.36rem',
+                padding: '0 2px', borderRadius: 2, letterSpacing: 0.2,
+                textTransform: 'uppercase', fontWeight: 'bold', lineHeight: 1.4 }}>
+                {abLow}
+              </span>
+            )
+          })}
+        </div>
+      )}
 
       {/* ── Text + stats area ── */}
       <div style={{
@@ -350,14 +413,23 @@ function CardTooltip({ card, rect }) {
         position: 'relative',
         overflow: 'hidden',
       }}>
+        {getCardArt(card) && (
+          <img
+            src={getCardArt(card)}
+            alt=""
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
+          />
+        )}
         <div style={{ position: 'absolute', inset: 0, background: ART_OVERLAY }} />
-        <span style={{
-          fontSize: '3rem',
-          filter: 'drop-shadow(2px 2px 0 rgba(0,0,0,0.9))',
-          zIndex: 1, lineHeight: 1,
-        }}>
-          {isCreature ? '⚔' : isLand ? '🏔' : '✨'}
-        </span>
+        {!getCardArt(card) && (
+          <span style={{
+            fontSize: '3rem',
+            filter: 'drop-shadow(2px 2px 0 rgba(0,0,0,0.9))',
+            zIndex: 1, lineHeight: 1,
+          }}>
+            {isCreature ? '⚔' : isLand ? '🏔' : '✨'}
+          </span>
+        )}
       </div>
 
       {/* Type bar */}
@@ -447,7 +519,7 @@ function CardTooltip({ card, rect }) {
 }
 
 // ── Battlefield row ──────────────────────────────────────────────────────────
-function Battlefield({ slots, label, selectedIdx, onSlotClick, attackingIndices = [], isFlipped = false, onCardHover }) {
+function Battlefield({ slots, label, selectedIdx, onSlotClick, attackingIndices = [], isFlipped = false, onCardHover, newCardIdx = null }) {
   return (
     <div style={{
       flex: 1,
@@ -478,7 +550,8 @@ function Battlefield({ slots, label, selectedIdx, onSlotClick, attackingIndices 
           <div style={{ color: '#2A4060', fontSize: '0.72rem', fontStyle: 'italic' }}>— empty —</div>
         )}
         {slots.map((slot, i) => (
-          <div key={i} style={{ transform: isFlipped ? 'scaleY(-1)' : 'none' }}>
+          <div key={i} style={{ transform: isFlipped ? 'scaleY(-1)' : 'none',
+            animation: newCardIdx === i ? 'cardEnterField 0.38s ease-out' : undefined }}>
             <BattleCard
               card={slot.card}
               tapped={slot.tapped}
@@ -545,6 +618,10 @@ function GameLog({ log }) {
 
 // ── Win/Loss Overlay ─────────────────────────────────────────────────────────
 function ResultOverlay({ winner, reward, npcName, onContinue, onRematch, onRetreat }) {
+  useEffect(() => {
+    if (winner === 'player') SoundEngine.victory()
+    else SoundEngine.defeat()
+  }, [])
   const won = winner === 'player'
   return (
     <div style={{
@@ -594,9 +671,300 @@ function ResultOverlay({ winner, reward, npcName, onContinue, onRematch, onRetre
   )
 }
 
+// ── Scry Modal ───────────────────────────────────────────────────────────────
+function ScryModal({ scryCards, onConfirm }) {
+  const [bottomSet, setBottomSet] = useState(new Set())
+
+  function toggleBottom(idx) {
+    setBottomSet(prev => {
+      const next = new Set(prev)
+      next.has(idx) ? next.delete(idx) : next.add(idx)
+      return next
+    })
+  }
+
+  function handleConfirm() {
+    const topCards    = scryCards.filter((_, i) => !bottomSet.has(i))
+    const bottomCards = scryCards.filter((_, i) =>  bottomSet.has(i))
+    onConfirm(topCards, bottomCards)
+  }
+
+  return (
+    <div style={{
+      position: 'absolute', inset: 0,
+      background: 'rgba(4,8,16,0.97)',
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      zIndex: 300, fontFamily: "'Courier New', monospace",
+    }}>
+      {/* Header */}
+      <div style={{
+        width: '100%', background: '#0A1828',
+        borderBottom: '2px solid #4A80C8',
+        padding: '8px 16px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <span style={{ fontFamily: "'Cinzel',serif", fontSize: '1rem', color: '#88BBFF', fontWeight: 900, letterSpacing: '0.1em' }}>
+          ✦ SCRY {scryCards.length} ✦
+        </span>
+        <span style={{ fontSize: '0.6rem', color: '#4A6888' }}>
+          Top {scryCards.length} card{scryCards.length !== 1 ? 's' : ''} of your library
+        </span>
+      </div>
+
+      <div style={{ fontSize: '0.6rem', color: '#4A6888', padding: '8px 16px 4px', textAlign: 'center' }}>
+        Click a card to send it to the <span style={{ color: '#CC6644' }}>bottom</span>. Unmarked cards stay on <span style={{ color: '#88BBFF' }}>top</span> in this order.
+      </div>
+
+      {/* Cards */}
+      <div style={{
+        flex: 1, overflowY: 'auto', width: '100%', maxWidth: 680,
+        padding: '8px 16px',
+        display: 'flex', flexDirection: 'column', gap: 5,
+      }}>
+        {scryCards.length === 0 && (
+          <div style={{ color: '#506880', fontSize: '0.75rem', textAlign: 'center', marginTop: 24 }}>
+            — Library is empty —
+          </div>
+        )}
+        {scryCards.map((card, i) => {
+          const toBottom = bottomSet.has(i)
+          const color = card.color || 'colorless'
+          const frame = CARD_FRAME[color] || CARD_FRAME.colorless
+          const isCreature = card.type === 'creature'
+          return (
+            <div
+              key={`scry-${i}`}
+              onClick={() => toggleBottom(i)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                background: toBottom
+                  ? 'rgba(120,40,20,0.35)'
+                  : `linear-gradient(90deg, ${frame.bg}22, transparent)`,
+                border: `1px solid ${toBottom ? '#CC664488' : frame.border + '44'}`,
+                borderLeft: `3px solid ${toBottom ? '#CC6644' : '#88BBFF'}`,
+                borderRadius: 3,
+                padding: '6px 10px',
+                cursor: 'pointer',
+                opacity: toBottom ? 0.7 : 1,
+              }}
+            >
+              {/* Position label */}
+              <div style={{
+                flexShrink: 0, width: 28, textAlign: 'center',
+                fontSize: '0.55rem', fontWeight: 700,
+                color: toBottom ? '#CC6644' : '#88BBFF',
+              }}>
+                {toBottom ? '↓ BOT' : `↑ #${i + 1}`}
+              </div>
+
+              {/* Color swatch */}
+              <div style={{ width: 8, height: 40, background: frame.header, borderRadius: 2, flexShrink: 0 }} />
+
+              {/* Card info */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: "'Cinzel',serif", fontSize: '0.72rem', fontWeight: 700, color: '#E8E0C8' }}>
+                  {card.name}
+                </div>
+                <div style={{ fontSize: '0.55rem', color: '#7090B0', textTransform: 'uppercase', letterSpacing: 1 }}>
+                  {card.type}{card.rarity ? ` · ${card.rarity}` : ''}
+                  {isCreature && card.power != null ? ` · ${card.power}/${card.toughness}` : ''}
+                </div>
+                {card.description && (
+                  <div style={{ fontSize: '0.5rem', color: '#A09880', fontStyle: 'italic', marginTop: 2 }}>
+                    {card.description.slice(0, 90)}{card.description.length > 90 ? '…' : ''}
+                  </div>
+                )}
+              </div>
+
+              {/* Mana cost */}
+              {card.type !== 'land' && (
+                <div style={{
+                  minWidth: 24, height: 24, borderRadius: '50%',
+                  background: frame.header, border: `1.5px solid ${frame.border}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '0.65rem', fontWeight: 'bold', color: frame.headerText, flexShrink: 0,
+                }}>
+                  {getManaCost(card)}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Summary + confirm */}
+      <div style={{
+        width: '100%', padding: '10px 16px',
+        background: '#0A1828', borderTop: '1px solid rgba(72,128,200,0.3)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <div style={{ fontSize: '0.6rem', color: '#4A6888' }}>
+          <span style={{ color: '#88BBFF' }}>{scryCards.length - bottomSet.size} on top</span>
+          {bottomSet.size > 0 && <span style={{ color: '#CC6644' }}> · {bottomSet.size} to bottom</span>}
+        </div>
+        <button
+          onClick={handleConfirm}
+          style={{
+            padding: '6px 20px',
+            background: '#1A3A70', border: '1px solid #4A80C8',
+            color: '#88BBFF', cursor: 'pointer',
+            fontFamily: "'Cinzel',serif", fontSize: '0.75rem',
+            letterSpacing: '0.08em', fontWeight: 700,
+          }}
+        >
+          Confirm
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── Search / Wish Modal ──────────────────────────────────────────────────────
+function SearchModal({ library, wishCards, onPickLibrary, onPickWish, onSkip }) {
+  const [tab, setTab] = useState('library')
+  const cards = tab === 'library' ? library : wishCards
+
+  const TAB_STYLE = (active) => ({
+    padding: '4px 14px',
+    fontFamily: "'Cinzel',serif",
+    fontSize: '0.7rem',
+    fontWeight: 700,
+    letterSpacing: '0.06em',
+    cursor: 'pointer',
+    background: active ? '#C8961E' : 'rgba(212,175,55,0.08)',
+    color: active ? '#0A0E1A' : '#D4AF37',
+    border: `1px solid ${active ? '#D4AF37' : 'rgba(212,175,55,0.3)'}`,
+    borderRadius: 3,
+  })
+
+  return (
+    <div style={{
+      position: 'absolute', inset: 0,
+      background: 'rgba(4,8,16,0.97)',
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      zIndex: 300, fontFamily: "'Courier New', monospace",
+    }}>
+      {/* Header */}
+      <div style={{
+        width: '100%', background: '#0A1828',
+        borderBottom: '2px solid #C8961E',
+        padding: '8px 16px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <span style={{ fontFamily: "'Cinzel',serif", fontSize: '1rem', color: '#D4AF37', fontWeight: 900, letterSpacing: '0.1em' }}>
+          ✦ CHOOSE A CARD ✦
+        </span>
+        <button onClick={onSkip} style={{
+          background: 'transparent', border: '1px solid rgba(212,175,55,0.3)',
+          color: '#7090B0', cursor: 'pointer', padding: '3px 10px',
+          fontFamily: "'Cinzel',serif", fontSize: '0.65rem',
+        }}>
+          Skip
+        </button>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: 8, padding: '10px 0 6px' }}>
+        <button style={TAB_STYLE(tab === 'library')} onClick={() => setTab('library')}>
+          Search Library ({library.length})
+        </button>
+        <button style={TAB_STYLE(tab === 'wish')} onClick={() => setTab('wish')}>
+          From Collection ({wishCards.length})
+        </button>
+      </div>
+
+      <div style={{ fontSize: '0.6rem', color: '#506880', marginBottom: 8 }}>
+        {tab === 'library'
+          ? 'Pick a card from your library — it goes to your hand and your library shuffles.'
+          : 'Wish for a card from your deck — it comes directly to your hand.'}
+      </div>
+
+      {/* Card list */}
+      <div style={{
+        flex: 1, overflowY: 'auto', width: '100%', maxWidth: 680,
+        padding: '0 16px 16px',
+        display: 'flex', flexDirection: 'column', gap: 5,
+      }}>
+        {cards.length === 0 && (
+          <div style={{ color: '#506880', fontSize: '0.75rem', textAlign: 'center', marginTop: 24 }}>
+            — No cards available —
+          </div>
+        )}
+        {cards.map((card, i) => {
+          const color = card.color || 'colorless'
+          const frame = CARD_FRAME[color] || CARD_FRAME.colorless
+          const isCreature = card.type === 'creature'
+          return (
+            <div
+              key={`${card.id}-${i}`}
+              onClick={() => tab === 'library' ? onPickLibrary(card.id) : onPickWish(card)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                background: `linear-gradient(90deg, ${frame.bg}22, transparent)`,
+                border: `1px solid ${frame.border}44`,
+                borderLeft: `3px solid ${frame.border}`,
+                borderRadius: 3,
+                padding: '6px 10px',
+                cursor: 'pointer',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = `linear-gradient(90deg, ${frame.bg}55, ${frame.bg}22)` }}
+              onMouseLeave={e => { e.currentTarget.style.background = `linear-gradient(90deg, ${frame.bg}22, transparent)` }}
+            >
+              {/* Color swatch */}
+              <div style={{ width: 8, height: 40, background: frame.header, borderRadius: 2, flexShrink: 0 }} />
+
+              {/* Card info */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: "'Cinzel',serif", fontSize: '0.72rem', fontWeight: 700, color: '#E8E0C8' }}>
+                  {card.name}
+                </div>
+                <div style={{ fontSize: '0.55rem', color: '#7090B0', textTransform: 'uppercase', letterSpacing: 1 }}>
+                  {card.type}{card.rarity ? ` · ${card.rarity}` : ''}
+                  {isCreature && card.power != null ? ` · ${card.power}/${card.toughness}` : ''}
+                </div>
+                {card.description && (
+                  <div style={{ fontSize: '0.5rem', color: '#A09880', fontStyle: 'italic', marginTop: 2 }}>
+                    {card.description.slice(0, 80)}{card.description.length > 80 ? '…' : ''}
+                  </div>
+                )}
+              </div>
+
+              {/* Mana cost badge */}
+              {card.type !== 'land' && (
+                <div style={{
+                  minWidth: 24, height: 24, borderRadius: '50%',
+                  background: frame.header, border: `1.5px solid ${frame.border}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '0.65rem', fontWeight: 'bold', color: frame.headerText, flexShrink: 0,
+                }}>
+                  {getManaCost(card)}
+                </div>
+              )}
+
+              {/* Pick button */}
+              <div style={{
+                padding: '4px 10px',
+                background: 'rgba(200,150,30,0.15)',
+                border: '1px solid rgba(212,175,55,0.4)',
+                borderRadius: 3,
+                color: '#D4AF37',
+                fontSize: '0.65rem',
+                fontFamily: "'Cinzel',serif",
+                flexShrink: 0,
+              }}>
+                Pick
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── Main BattleScreen component ───────────────────────────────────────────────
 export default function BattleScreen({ npcData, playerDeck, userProgress, onBattleEnd }) {
-  const { npcName = 'Opponent', color = 'colorless', deckType = 'colorless', reward = 50 } = npcData || {}
+  const { npcName = 'Opponent', color = 'colorless', deckType = 'colorless', reward = 50, difficulty = 'normal' } = npcData || {}
 
   const engineRef = useRef(null)
   const aiRef = useRef(null)
@@ -606,9 +974,24 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
   const [selectedBfIdx, setSelectedBfIdx] = useState(null)
   const [pendingAttackers, setPendingAttackers] = useState([])
   const [selectingAttackers, setSelectingAttackers] = useState(false)
+  const [blockingPhase, setBlockingPhase] = useState(false)
+  const [pendingBlockerSrcIdx, setPendingBlockerSrcIdx] = useState(null)
+  const [assignedBlockers, setAssignedBlockers] = useState({})
+  const blockingResumeRef = useRef(null)
   const [aiThinking, setAiThinking] = useState(false)
   const [message, setMessage] = useState('')
   const [hoveredCard, setHoveredCard] = useState(null) // { card, rect }
+  const [searchModal, setSearchModal] = useState(null) // { library, wishCards }
+  const [scryModal, setScryModal]     = useState(null) // { scryCards, amount }
+  const [instantWindow, setInstantWindow] = useState(false)
+  const [pendingETB, setPendingETB] = useState(null) // { card, effect }
+  const [pendingAiActions, setPendingAiActions] = useState(null) // { actions, nextIdx }
+  const [healPops, setHealPops] = useState([]) // { id, who, amount }
+  const healPopIdRef = useRef(0)
+  const [newCardAnimIdx, setNewCardAnimIdx] = useState(null)
+  const [muted, setMuted] = useState(false)
+  const [splitSecondFlash, setSplitSecondFlash] = useState(false)
+  const [scoopConfirm, setScoopConfirm] = useState(false)
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -627,13 +1010,20 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
     setHoveredCard(card ? { card, rect } : null)
   }
 
+  function handleToggleMute() {
+    const nowMuted = SoundEngine.toggleMute()
+    setMuted(nowMuted)
+  }
+
   // ── Initialize engine on mount ───────────────────────────────────────────────
   useEffect(() => {
+    SoundEngine.startBGM('battle')
     import('./data/aiDecks.js').then(({ AI_DECKS }) => {
       const aiDeckDef = AI_DECKS[deckType] || AI_DECKS.colorless
-      const engine = new CardEngine(playerDeck, aiDeckDef.cards, color)
+      const tutorial = npcData?.tutorial || false
+      const engine = new CardEngine(playerDeck, aiDeckDef.cards, color, tutorial)
       engineRef.current = engine
-      aiRef.current = new AIOpponent(engine)
+      aiRef.current = new AIOpponent(engine, difficulty)
 
       for (let i = 0; i < 5; i++) engine.drawCard('player')
       for (let i = 0; i < 5; i++) engine.drawCard('ai')
@@ -643,17 +1033,24 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
 
       syncState()
     })
+    return () => SoundEngine.stopBGM()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Player action handlers ───────────────────────────────────────────────────
 
   function handleHandCardClick(i) {
-    if (!gameState || gameState.activePlayer !== 'player') return
-    if (gameState.phase !== 'main') return
+    if (!gameState) return
     if (aiThinking) return
-
     const card = gameState.player.hand[i]
     if (!card) return
+    // During instant window: allow instants, spells (Scryfall 320 cards), and flash creatures
+    if (instantWindow) {
+      const isFlash = card.type === 'creature' && card.abilities?.includes('flash')
+      if (card.type !== 'instant' && card.type !== 'spell' && !isFlash) return showMessage('You can only cast instants or Flash creatures right now — or press PASS')
+    } else {
+      if (gameState.activePlayer !== 'player') return
+      if (gameState.phase !== 'main') return
+    }
 
     if (selectedHandIdx === i) {
       setSelectedHandIdx(null)
@@ -706,10 +1103,21 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
 
     const result = engineRef.current.castCreature('player', selectedHandIdx)
     if (!result.ok) return showMessage(result.error)
+    SoundEngine.cardPlay()
 
+    if (result.needsETBTarget) {
+      setPendingETB(result.needsETBTarget)
+      showMessage(`${result.needsETBTarget.card.name} enters — click an opponent's creature to target`, 4000)
+    }
     setSelectedHandIdx(null)
     setSelectedBfIdx(null)
     syncState()
+    // Animate the newly placed card
+    const newIdx = engineRef.current.state.player.battlefield.length - 1
+    if (newIdx >= 0) {
+      setNewCardAnimIdx(newIdx)
+      setTimeout(() => setNewCardAnimIdx(null), 450)
+    }
   }
 
   function handleCastSpell(targetType = 'player', targetIdx = -1) {
@@ -721,21 +1129,93 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
 
     const result = engineRef.current.castSpell('player', selectedHandIdx, targetIdx, targetType)
     if (!result.ok) return showMessage(result.error)
+    SoundEngine.spellCast()
 
     setSelectedHandIdx(null)
     setSelectedBfIdx(null)
+
+    if (result.needsChoice === 'scry') {
+      setScryModal({ scryCards: result.scryCards, amount: result.amount })
+      return
+    }
+
+    if (result.needsChoice === 'search') {
+      // Build wish cards: unique cards from the player's original deck
+      const seen = new Set()
+      const wishCards = []
+      for (const entry of (playerDeck || [])) {
+        const c = entry.card || entry
+        if (c && !seen.has(c.id)) { seen.add(c.id); wishCards.push(c) }
+      }
+      setSearchModal({ library: result.library, wishCards })
+      return
+    }
+
+    if (result.needsChoice === 'counter') {
+      if (instantWindow && pendingAiActions !== null) {
+        // Cancel the AI's pending spell/creature — counter resolves
+        const { actions, nextIdx } = pendingAiActions
+        const pendingAction = actions[nextIdx]
+        engineRef.current._log(`Counter spell cancels AI's ${pendingAction?.type === 'castCreature' ? 'creature' : 'spell'}!`)
+        setPendingAiActions(null)
+        setInstantWindow(false)
+        syncState()
+        setAiThinking(true)
+        executeAiActions(actions, nextIdx + 1)
+        return
+      } else {
+        // No spell on the stack to counter — spell fizzles
+        engineRef.current._log(`Counter spell — no spell on the stack to counter`)
+      }
+    }
+
+    // Split second: spell resolved, no one can respond — close instant window immediately
+    if (result.splitSecond) {
+      setSplitSecondFlash(true)
+      setTimeout(() => setSplitSecondFlash(false), 1800)
+      setInstantWindow(false)
+      syncState()
+      if (pendingAiActions !== null) {
+        const { actions, nextIdx } = pendingAiActions
+        setPendingAiActions(null)
+        setAiThinking(true)
+        executeAiActions(actions, nextIdx, true) // playerPassedPriority: skip re-opening instant window
+      }
+      return
+    }
+
     syncState()
   }
 
   function handlePlayerBfClick(i) {
     if (!gameState || aiThinking) return
 
-    if (gameState.phase === 'main' && selectedHandIdx !== null) {
+    if ((gameState.phase === 'main') && selectedHandIdx !== null) {
       const card = gameState.player.hand[selectedHandIdx]
       if (card && (card.type === 'instant' || card.type === 'sorcery' || card.type === 'spell')) {
-        handleCastSpell('creature', i)
+        handleCastSpell('own_creature', i)
         return
       }
+    }
+
+    // Blocking phase — click own creature to select it as a blocker
+    if (blockingPhase) {
+      const slot = gameState.player.battlefield[i]
+      if (!slot || slot.card.type !== 'creature' || slot.summoningSick) {
+        return showMessage('That creature cannot block')
+      }
+      setPendingBlockerSrcIdx(prev => prev === i ? null : i)
+      return
+    }
+
+    // Tap to activate ability: main phase, player's turn, no spell selected, not selecting attackers
+    if ((gameState.phase === 'main') && gameState.activePlayer === 'player' && selectedHandIdx === null && !selectingAttackers) {
+      const result = engineRef.current.activateAbility('player', i)
+      if (result.ok) {
+        syncState()
+        return
+      }
+      // If no ability, fall through to attacker selection below
     }
 
     if (selectingAttackers) {
@@ -751,7 +1231,47 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
 
   function handleAiBfClick(i) {
     if (!gameState || aiThinking) return
-    if (gameState.phase !== 'main' || selectedHandIdx === null) return
+
+    // ETB targeting takes priority
+    if (pendingETB) {
+      engineRef.current.completeETB('player', pendingETB.card, pendingETB.effect, i)
+      setPendingETB(null)
+      syncState()
+      return
+    }
+
+    // Blocking phase — click AI attacker to assign the selected blocker
+    if (blockingPhase) {
+      if (pendingBlockerSrcIdx === null) {
+        return showMessage('Click one of your creatures first to select a blocker')
+      }
+      const isAttacker = gameState.attackers?.includes(i)
+      if (!isAttacker) {
+        return showMessage('Click one of the attacking creatures to assign your blocker')
+      }
+      // Flying check: flying attackers can only be blocked by flying or reach creatures
+      const attacker = gameState.ai.battlefield[i]
+      const blocker  = gameState.player.battlefield[pendingBlockerSrcIdx]
+      const hasAbNorm = (card, ab) => card?.abilities?.some(a => a.toLowerCase().replace(/[\s_]/g,'') === ab)
+      if (attacker && blocker && hasAbNorm(attacker.card, 'flying')) {
+        const canBlock = hasAbNorm(blocker.card, 'flying') || hasAbNorm(blocker.card, 'reach')
+        if (!canBlock) return showMessage(`${blocker.card.name} can't block ${attacker.card.name} — needs Flying or Reach`)
+      }
+      setAssignedBlockers(prev => {
+        const next = { ...prev }
+        for (const k of Object.keys(next)) {
+          if (next[k] === pendingBlockerSrcIdx) delete next[k]
+        }
+        next[i] = pendingBlockerSrcIdx
+        return next
+      })
+      setPendingBlockerSrcIdx(null)
+      return
+    }
+
+    const isMain = (gameState.phase === 'main') && gameState.activePlayer === 'player'
+    if (!isMain && !instantWindow) return
+    if (selectedHandIdx === null) return
 
     const card = gameState.player.hand[selectedHandIdx]
     if (!card || (card.type !== 'instant' && card.type !== 'sorcery' && card.type !== 'spell')) return
@@ -778,7 +1298,15 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
 
     const blockerMap = aiRef.current.chooseBlockers(engineRef.current.state)
     engineRef.current.declareBlockers(blockerMap)
-    engineRef.current.resolveCombat()
+    const combatResult = engineRef.current.resolveCombat()
+    SoundEngine.attackHit()
+    if (combatResult?.lifelinkHeals?.length) {
+      combatResult.lifelinkHeals.forEach(({ who, amount }) => {
+        const id = ++healPopIdRef.current
+        setHealPops(prev => [...prev, { id, who, amount }])
+        setTimeout(() => setHealPops(prev => prev.filter(p => p.id !== id)), 1400)
+      })
+    }
     syncState()
 
     if (engineRef.current.state.winner) {
@@ -805,6 +1333,21 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
     runAiTurn()
   }
 
+  function handlePassInstantWindow() {
+    setInstantWindow(false)
+    setSelectedHandIdx(null)
+    setSelectedBfIdx(null)
+    if (pendingAiActions !== null) {
+      const { actions, nextIdx } = pendingAiActions
+      setPendingAiActions(null)
+      setAiThinking(true)
+      executeAiActions(actions, nextIdx, true) // playerPassedPriority=true: skip instant check for this action
+    } else {
+      engineRef.current.startTurn('player')
+      syncState()
+    }
+  }
+
   // ── AI turn runner ───────────────────────────────────────────────────────────
   function runAiTurn() {
     setAiThinking(true)
@@ -825,7 +1368,11 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
     }, 800)
   }
 
-  function executeAiActions(actions, idx) {
+  function findHandIndex(hand, cardId) {
+    return hand.findIndex(c => c.id === cardId)
+  }
+
+  function executeAiActions(actions, idx, playerPassedPriority = false) {
     if (!engineRef.current) return
 
     if (idx >= actions.length || engineRef.current.state.winner) {
@@ -833,15 +1380,35 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
         if (!engineRef.current) return
         engineRef.current.endTurn('ai')
         syncState()
-
-        engineRef.current.startTurn('player')
-        syncState()
         setAiThinking(false)
+        setInstantWindow(true)
+        // pendingAiActions is null here = end-of-turn window
       }, 600)
       return
     }
 
     const action = actions[idx]
+
+    // Check if AI is casting a split-second spell — player cannot respond to split second
+    const aiSplitSecond = action.type === 'castSpell' &&
+      engineRef.current.state.ai.hand.find(c => c.id === action.cardId)?.abilities?.includes('split_second')
+
+    if (aiSplitSecond) {
+      setSplitSecondFlash(true)
+      setTimeout(() => setSplitSecondFlash(false), 1800)
+    }
+
+    // Before AI spell/creature: give player a respond window if they have instants
+    // (skipped entirely if AI is casting split second — split second cannot be responded to)
+    if (!playerPassedPriority && !aiSplitSecond &&
+        (action.type === 'castSpell' || action.type === 'castCreature') &&
+        engineRef.current.state.player.hand.some(c => c.type === 'instant' || c.type === 'spell' || (c.type === 'creature' && c.abilities?.includes('flash')))) {
+      setPendingAiActions({ actions, nextIdx: idx })
+      setAiThinking(false)
+      setInstantWindow(true)
+      syncState()
+      return
+    }
 
     setTimeout(() => {
       if (!engineRef.current) return
@@ -849,15 +1416,23 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
 
       try {
         if (action.type === 'castCreature') {
-          engine.castCreature('ai', action.handIndex)
+          const handIdx = findHandIndex(engine.state.ai.hand, action.cardId)
+          if (handIdx === -1) { executeAiActions(actions, idx + 1); return }
+          engine.castCreature('ai', handIdx)
         } else if (action.type === 'castSpell') {
-          engine.castSpell('ai', action.handIndex, action.targetIndex, action.targetType)
+          const handIdx = findHandIndex(engine.state.ai.hand, action.cardId)
+          if (handIdx === -1) { executeAiActions(actions, idx + 1); return }
+          engine.castSpell('ai', handIdx, action.targetIndex, action.targetType)
         } else if (action.type === 'attack') {
           engine.declareAttackers(action.attackerIndices)
-
-          const blockerMap = autoPlayerBlock(engine.state)
-          engine.declareBlockers(blockerMap)
-          engine.resolveCombat()
+          // Pause for player to declare blockers
+          blockingResumeRef.current = { actions, nextIdx: idx + 1 }
+          setAssignedBlockers({})
+          setPendingBlockerSrcIdx(null)
+          setBlockingPhase(true)
+          setAiThinking(false)
+          syncState()
+          return
         }
       } catch (e) {
         console.warn('AI action failed:', e.message)
@@ -872,6 +1447,35 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
 
       executeAiActions(actions, idx + 1)
     }, 700)
+  }
+
+  function handleDoneBlocking() {
+    const engine = engineRef.current
+    engine.declareBlockers(assignedBlockers)
+    const aiCombatResult = engine.resolveCombat()
+    SoundEngine.attackHit()
+    if (aiCombatResult?.lifelinkHeals?.length) {
+      SoundEngine.lifelinkHeal()
+      aiCombatResult.lifelinkHeals.forEach(({ who, amount }) => {
+        const id = ++healPopIdRef.current
+        setHealPops(prev => [...prev, { id, who, amount }])
+        setTimeout(() => setHealPops(prev => prev.filter(p => p.id !== id)), 1400)
+      })
+    }
+    setBlockingPhase(false)
+    setPendingBlockerSrcIdx(null)
+    setAssignedBlockers({})
+    syncState()
+    if (engine.state.winner) {
+      setAiThinking(false)
+      return
+    }
+    const resume = blockingResumeRef.current
+    blockingResumeRef.current = null
+    if (resume) {
+      setAiThinking(true)
+      executeAiActions(resume.actions, resume.nextIdx)
+    }
   }
 
   function autoPlayerBlock(state) {
@@ -961,9 +1565,88 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
       overflow: 'hidden',
       zIndex: 50,
     }}>
+      {/* ── Lifelink heal pops ── */}
+      {healPops.map(({ id, who, amount }) => (
+        <div key={id} style={{
+          position: 'absolute',
+          left: who === 'player' ? '12%' : '62%',
+          top: '18%',
+          color: '#44DD88',
+          fontSize: '1.1rem',
+          fontWeight: 'bold',
+          fontFamily: 'monospace',
+          textShadow: '0 0 8px #22AA66, 1px 1px 0 #000',
+          pointerEvents: 'none',
+          animation: 'lifelinkPop 1.4s ease-out forwards',
+          zIndex: 400,
+        }}>
+          +{amount} ❤
+        </div>
+      ))}
+
       {/* Hover tooltip — rendered at fixed position above everything */}
       {hoveredCard && (
         <CardTooltip card={hoveredCard.card} rect={hoveredCard.rect} />
+      )}
+
+      {/* Split-second flash overlay */}
+      {splitSecondFlash && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 9999, pointerEvents: 'none',
+        }}>
+          <div style={{
+            background: 'linear-gradient(135deg, #1a0a30 0%, #2d1060 100%)',
+            border: '2px solid #9933ff',
+            color: '#cc88ff',
+            fontFamily: 'monospace',
+            fontSize: '1.5rem',
+            fontWeight: 'bold',
+            padding: '1rem 2.5rem',
+            borderRadius: '10px',
+            textAlign: 'center',
+            boxShadow: '0 0 32px #9933ff, 0 0 64px #6611bb',
+            letterSpacing: '0.08em',
+          }}>
+            ⚡ SPLIT SECOND
+            <div style={{ fontSize: '0.85rem', color: '#aa77cc', fontWeight: 'normal', marginTop: '0.3rem' }}>
+              Cannot be responded to — resolves immediately
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Scry modal */}
+      {scryModal && (
+        <ScryModal
+          scryCards={scryModal.scryCards}
+          amount={scryModal.amount}
+          onConfirm={(topCards, bottomCards) => {
+            engineRef.current.completeScry('player', topCards, bottomCards)
+            setScryModal(null)
+            syncState()
+          }}
+        />
+      )}
+
+      {/* Search / wish modal */}
+      {searchModal && (
+        <SearchModal
+          library={searchModal.library}
+          wishCards={searchModal.wishCards}
+          onPickLibrary={(cardId) => {
+            engineRef.current.completeSearch('player', cardId)
+            setSearchModal(null)
+            syncState()
+          }}
+          onPickWish={(card) => {
+            engineRef.current.completeWish('player', card)
+            setSearchModal(null)
+            syncState()
+          }}
+          onSkip={() => { setSearchModal(null); syncState() }}
+        />
       )}
 
       {/* Result overlay */}
@@ -978,9 +1661,9 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
             aiRef.current = null
             import('./data/aiDecks.js').then(({ AI_DECKS }) => {
               const aiDeckDef = AI_DECKS[deckType] || AI_DECKS.colorless
-              const engine = new CardEngine(playerDeck, aiDeckDef.cards)
+              const engine = new CardEngine(playerDeck, aiDeckDef.cards, color, npcData?.tutorial || false)
               engineRef.current = engine
-              aiRef.current = new AIOpponent(engine)
+              aiRef.current = new AIOpponent(engine, difficulty)
               for (let i = 0; i < 5; i++) engine.drawCard('player')
               for (let i = 0; i < 5; i++) engine.drawCard('ai')
               engine.state.phase = 'main'
@@ -990,10 +1673,12 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
               setPendingAttackers([])
               setSelectingAttackers(false)
               setAiThinking(false)
+              setInstantWindow(false)
+              setPendingAiActions(null)
               syncState()
             })
           }}
-          onRetreat={() => onBattleEnd({ winner: 'ai', reward: 0 })}
+          onRetreat={() => onBattleEnd({ winner: 'ai', reward: 0, hpDamage: 1 })}
         />
       )}
 
@@ -1020,6 +1705,20 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
         }}>
           {npcName}
         </div>
+        {npcData?.tutorial && (
+          <div style={{
+            background: '#1A4A90',
+            border: '2px solid #4488EE',
+            borderRadius: 2,
+            padding: '1px 7px',
+            fontSize: '0.6rem',
+            fontWeight: 'bold',
+            color: '#88CCFF',
+            letterSpacing: 2,
+          }}>
+            TUTORIAL
+          </div>
+        )}
         <span style={{ color: '#B0C8E8', fontSize: '0.75rem', fontWeight: 'bold' }}>HP</span>
         <LifeDots life={ai.life} />
         <span style={{ color: '#7090B0', fontSize: '0.75rem' }}>
@@ -1031,6 +1730,21 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
         <span style={{ marginLeft: 'auto', color: '#506880', fontSize: '0.7rem' }}>
           TURN <span style={{ color: '#B0C8E8' }}>{turn}</span>
         </span>
+        <button
+          onClick={handleToggleMute}
+          title={muted ? 'Unmute' : 'Mute'}
+          style={{
+            background: 'none',
+            border: '1px solid ' + (muted ? '#506880' : '#D4AF37'),
+            borderRadius: 3,
+            color: muted ? '#506880' : '#D4AF37',
+            fontSize: '0.82rem',
+            padding: '1px 7px',
+            cursor: 'pointer',
+            lineHeight: 1.4,
+            flexShrink: 0,
+          }}
+        >{muted ? '\uD83D\uDD07' : '\uD83D\uDD0A'}</button>
         {aiThinking && (
           <span style={{ color: '#88DDFF', fontSize: '0.7rem', animation: 'pulse 1s infinite' }}>
             ▶ AI...
@@ -1050,7 +1764,8 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
           slots={ai.battlefield}
           label="AI Battlefield"
           selectedIdx={null}
-          onSlotClick={isPlayerTurn && selectedHandIdx !== null ? handleAiBfClick : null}
+          onSlotClick={(isPlayerTurn && selectedHandIdx !== null) || pendingETB || (instantWindow && selectedHandIdx !== null) || blockingPhase ? handleAiBfClick : null}
+          attackingIndices={blockingPhase ? (gameState?.attackers ?? []) : []}
           isFlipped={false}
           onCardHover={handleCardHover}
         />
@@ -1065,6 +1780,46 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
         borderBottom: '1px solid #285080',
       }} />
 
+      {/* ── BLOCK PHASE BANNER ── */}
+      {blockingPhase && (
+        <div style={{
+          background: 'rgba(55,18,90,0.95)',
+          borderTop: '2px solid #9955DD',
+          borderBottom: '2px solid #9955DD',
+          padding: '5px 14px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          flexShrink: 0,
+        }}>
+          <span style={{ color: '#CC88FF', fontFamily: "'Cinzel', serif", fontSize: '0.72rem', fontWeight: 'bold', letterSpacing: 2, whiteSpace: 'nowrap' }}>
+            ⚔ BLOCK PHASE
+          </span>
+          <span style={{ color: '#AA88CC', fontFamily: "'Courier New', monospace", fontSize: '0.62rem', flex: 1 }}>
+            {pendingBlockerSrcIdx !== null
+              ? `${gameState?.player?.battlefield[pendingBlockerSrcIdx]?.card?.name ?? 'Creature'} selected — click an attacker to assign it as a blocker`
+              : 'Click your creature → then click an attacker to assign a blocker. Or skip.'}
+          </span>
+          {Object.keys(assignedBlockers).length > 0 && (
+            <span style={{ color: '#88CCFF', fontFamily: "'Courier New', monospace", fontSize: '0.6rem', whiteSpace: 'nowrap' }}>
+              {Object.keys(assignedBlockers).length} block{Object.keys(assignedBlockers).length > 1 ? 's' : ''} assigned
+            </span>
+          )}
+          <button onClick={handleDoneBlocking} style={{
+            background: '#3A0D7A',
+            border: '2px solid #9955DD',
+            color: '#EE88FF',
+            fontFamily: "'Cinzel', serif",
+            fontSize: '0.65rem',
+            padding: '4px 12px',
+            cursor: 'pointer',
+            borderRadius: 3,
+            letterSpacing: 1,
+            whiteSpace: 'nowrap',
+          }}>Done Blocking</button>
+        </div>
+      )}
+
       {/* ── PLAYER BATTLEFIELD ── */}
       <div style={{
         flex: 1,
@@ -1076,8 +1831,9 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
         <Battlefield
           slots={player.battlefield}
           label="Your Battlefield"
-          selectedIdx={null}
-          onSlotClick={isPlayerTurn ? handlePlayerBfClick : null}
+                  newCardIdx={newCardAnimIdx}
+          selectedIdx={blockingPhase ? pendingBlockerSrcIdx : null}
+          onSlotClick={isPlayerTurn || blockingPhase ? handlePlayerBfClick : null}
           attackingIndices={selectingAttackers ? pendingAttackers : []}
           onCardHover={handleCardHover}
         />
@@ -1187,7 +1943,7 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
                   card={card}
                   size="hand"
                   isSelected={selectedHandIdx === i}
-                  onClick={isPlayerTurn ? () => handleHandCardClick(i) : undefined}
+                  onClick={isPlayerTurn || instantWindow ? () => handleHandCardClick(i) : undefined}
                   onHover={handleCardHover}
                 />
               </div>
@@ -1199,9 +1955,9 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
             <div style={{ display: 'flex', gap: 6 }}>
               <button
                 className="btn-primary"
-                disabled={!isPlayerTurn || selectedHandIdx === null || !selectedCard || selectedCard.type !== 'creature' || !canCast}
+                disabled={(!isPlayerTurn && !(instantWindow && selectedCard?.abilities?.includes('flash'))) || selectedHandIdx === null || !selectedCard || selectedCard.type !== 'creature' || !canCast}
                 title={
-                  !isPlayerTurn ? 'Not your turn'
+                  (!isPlayerTurn && !(instantWindow && selectedCard?.abilities?.includes('flash'))) ? 'Not your turn (only Flash creatures can be cast now)'
                   : !selectedCard ? 'Select a creature from your hand'
                   : selectedCard.type !== 'creature' ? 'Select a creature card (not a spell or land)'
                   : !canCast ? `Costs ${selectedCardCost} mana — you have ${player.availableMana} (play more lands)`
@@ -1210,7 +1966,7 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
                 onClick={handlePlayCreature}
                 style={{ fontSize: '0.75rem', padding: '4px 10px' }}
               >
-                Play Creature
+                {instantWindow && selectedCard?.abilities?.includes('flash') ? 'Flash Creature' : 'Play Creature'}
               </button>
 
               <button
@@ -1231,11 +1987,11 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
 
               <button
                 className="btn-ghost"
-                disabled={!isPlayerTurn || selectedHandIdx === null || !selectedCard || (selectedCard.type !== 'instant' && selectedCard.type !== 'sorcery' && selectedCard.type !== 'spell') || !canCast}
+                disabled={(!isPlayerTurn && !instantWindow) || selectedHandIdx === null || !selectedCard || !['instant','sorcery','spell','enchantment','artifact'].includes(selectedCard.type) || !canCast}
                 title={
                   !isPlayerTurn ? 'Not your turn'
                   : !selectedCard ? 'Select a spell from your hand'
-                  : (selectedCard.type !== 'instant' && selectedCard.type !== 'sorcery' && selectedCard.type !== 'spell') ? 'Select an instant, sorcery, or spell card'
+                  : !['instant','sorcery','spell','enchantment','artifact'].includes(selectedCard.type) ? 'Select an instant, sorcery, enchantment, or artifact card'
                   : !canCast ? `Costs ${selectedCardCost} mana — you have ${player.availableMana} (play more lands)`
                   : `Cast ${selectedCard.name}`
                 }
@@ -1246,35 +2002,86 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
               </button>
             </div>
 
-            <div style={{ display: 'flex', gap: 6 }}>
-              {!selectingAttackers ? (
-                <button
-                  className="btn-ghost"
-                  disabled={!isPlayerTurn || phase === 'draw'}
-                  onClick={handleStartAttack}
-                  style={{ fontSize: '0.75rem', padding: '4px 10px' }}
-                >
-                  Attack
-                </button>
-              ) : (
+            {instantWindow ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ fontSize: '0.62rem',
+                              color: pendingAiActions ? '#FFCC44' : '#88CCFF',
+                              letterSpacing: 1, maxWidth: 180 }}>
+                  {pendingAiActions
+                    ? `AI about to cast a ${pendingAiActions.actions[pendingAiActions.nextIdx]?.type === 'castCreature' ? 'creature spell' : 'spell'} — counter or PASS`
+                    : "Opponent's turn ended — cast instants or PASS"
+                  }
+                </div>
                 <button
                   className="btn-primary"
-                  onClick={handleConfirmAttack}
-                  style={{ fontSize: '0.75rem', padding: '4px 10px', background: '#cc4422' }}
+                  onClick={handlePassInstantWindow}
+                  style={{ fontSize: '0.75rem', padding: '4px 14px',
+                           background: pendingAiActions ? '#5A3000' : '#1A4A90',
+                           borderColor: pendingAiActions ? '#FFAA44' : '#4488EE' }}
                 >
-                  Confirm Attack ({pendingAttackers.length})
+                  PASS →
                 </button>
-              )}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', gap: 6 }}>
+                {!selectingAttackers ? (
+                  <button
+                    className="btn-ghost"
+                    disabled={!isPlayerTurn || phase === 'draw'}
+                    onClick={handleStartAttack}
+                    style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+                  >
+                    Attack
+                  </button>
+                ) : (
+                  <button
+                    className="btn-primary"
+                    onClick={handleConfirmAttack}
+                    style={{ fontSize: '0.75rem', padding: '4px 10px', background: '#cc4422' }}
+                  >
+                    Confirm Attack ({pendingAttackers.length})
+                  </button>
+                )}
 
-              <button
-                className="btn-ghost"
-                disabled={!isPlayerTurn || aiThinking}
-                onClick={handleEndTurn}
-                style={{ fontSize: '0.75rem', padding: '4px 10px' }}
-              >
-                End Turn
-              </button>
-            </div>
+                <button
+                  className="btn-ghost"
+                  disabled={!isPlayerTurn || aiThinking}
+                  onClick={handleEndTurn}
+                  style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+                >
+                  End Turn
+                </button>
+
+                <button
+                  className="btn-ghost"
+                  onClick={() => {
+                    if (scoopConfirm) {
+                      onBattleEnd({ winner: 'ai', reward: 0, hpDamage: 1 })
+                    } else {
+                      setScoopConfirm(true)
+                      setTimeout(() => setScoopConfirm(false), 3000)
+                    }
+                  }}
+                  style={{
+                    fontSize: '0.7rem', padding: '4px 8px',
+                    color: scoopConfirm ? '#FF6644' : '#607090',
+                    borderColor: scoopConfirm ? '#FF6644' : '#405060',
+                  }}
+                >
+                  {scoopConfirm ? 'Confirm?' : 'Scoop'}
+                </button>
+
+                {pendingETB && (
+                  <button
+                    className="btn-ghost"
+                    onClick={() => { setPendingETB(null); syncState() }}
+                    style={{ fontSize: '0.75rem', padding: '4px 10px', color: '#FFAA44', borderColor: '#FFAA44' }}
+                  >
+                    Skip ETB
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Game log */}
@@ -1283,7 +2090,17 @@ export default function BattleScreen({ npcData, playerDeck, userProgress, onBatt
       </div>
 
       <style>{`
-        @keyframes pulse {
+        @keyframes cardEnterField {
+        0%   { transform: translateY(24px) scale(0.75); opacity: 0; }
+        60%  { transform: translateY(-4px) scale(1.04); opacity: 1; }
+        100% { transform: translateY(0)    scale(1.0);  opacity: 1; }
+      }
+      @keyframes lifelinkPop {
+        0%   { transform: translateY(0)    scale(1.0); opacity: 1; }
+        60%  { transform: translateY(-32px) scale(1.1); opacity: 1; }
+        100% { transform: translateY(-60px) scale(0.9); opacity: 0; }
+      }
+      @keyframes pulse {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.4; }
         }

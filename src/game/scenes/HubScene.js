@@ -1,39 +1,41 @@
 import Phaser from 'phaser'
+import IsoEngine, { TILE } from '../systems/IsoEngine.js'
+import { SoundEngine } from '../systems/SoundEngine.js'
 
-const TILE = 32
-const COLS = 25
-const ROWS = 18
+// ── Tile aliases ──────────────────────────────────────────────────────────────
+const S  = TILE.STONE, G = TILE.GRASS, W  = TILE.WATER
+const WL = TILE.WALL,  BK = TILE.BOOKSHELF, TB = TILE.TABLE
+const FN = TILE.FOUNTAIN, DR = TILE.DOOR
 
-// W=wall, F=floor. Bottom wall has a 3-tile gap (cols 11-13) for the World Map door.
+// ── Hub Academy Courtyard — 20 cols × 16 rows ──────────────────────────────
 // prettier-ignore
-const MAP = [
-  'WWWWWWWWWWWWWWWWWWWWWWWWW', // 0  top wall
-  'WFFFFFFFFFFFFFFFFFFFFFFFFW', // 1
-  'WFFFFFFFFFFFFFFFFFFFFFFFFW', // 2
-  'WFFFFFFFFFFFFFFFFFFFFFFFFW', // 3
-  'WFFFFFFFFFFFFFFFFFFFFFFFFW', // 4
-  'WFFFFFFFFFFFFFFFFFFFFFFFFW', // 5
-  'WFFFFFFFFFFFFFFFFFFFFFFFFW', // 6
-  'WFFFFFFFFFFFFFFFFFFFFFFFFW', // 7
-  'WFFFFFFFFFFFFFFFFFFFFFFFFW', // 8
-  'WFFFFFFFFFFFFFFFFFFFFFFFFW', // 9
-  'WFFFFFFFFFFFFFFFFFFFFFFFFW', // 10
-  'WFFFFFFFFFFFFFFFFFFFFFFFFW', // 11
-  'WFFFFFFFFFFFFFFFFFFFFFFFFW', // 12
-  'WFFFFFFFFFFFFFFFFFFFFFFFFW', // 13
-  'WFFFFFFFFFFFFFFFFFFFFFFFFW', // 14
-  'WFFFFFFFFFFFFFFFFFFFFFFFFW', // 15
-  'WFFFFFFFFFFFFFFFFFFFFFFFFW', // 16
-  'WWWWWWWWWWWFFFWWWWWWWWWWW', // 17 bottom wall — gap at cols 11-13
+const HUB_MAP = [
+  [WL,WL,WL,WL,WL,WL,WL,WL,WL,DR,DR,WL,WL,WL,WL,WL,WL,WL,WL,WL],  // 0 top wall + sanctum door
+  [WL, S, S, S, S,BK, S, S, S, S, S, S, S, S,BK, S, S, S, S,WL],  // 1
+  [WL, S, S, S, S, S, S, S, S, S, S, S, S, S, S, S, S, S, S,WL],  // 2
+  [WL, S, S,TB, S, S, S, S, S, S, S, S, S, S, S, S,TB, S, S,WL],  // 3 study tables
+  [WL, S, S, S, S, S, S, S, G, G, G, G, S, S, S, S, S, S, S,WL],  // 4
+  [DR, S, S, S, S, S, S, G, G, G, G, G, G, S, S, S, S, S, S,DR],  // 5 left/right doors
+  [WL, S, S, S, S, S, G, G, G,FN,FN, G, G, G, S, S, S, S, S,WL],  // 6
+  [WL, S, S, S, S, S, G, G,FN, W, W,FN, G, G, S, S, S, S, S,WL],  // 7 fountain
+  [WL, S, S, S, S, S, G, G,FN, W, W,FN, G, G, S, S, S, S, S,WL],  // 8
+  [WL, S, S, S, S, S, G, G, G,FN,FN, G, G, G, S, S, S, S, S,WL],  // 9
+  [DR, S, S, S, S, S, S, G, G, G, G, G, G, S, S, S, S, S, S,DR],  // 10 left/right doors
+  [WL, S, S, S, S, S, S, S, G, G, G, G, S, S, S, S, S, S, S,WL],  // 11
+  [WL, S, S,TB, S, S, S, S, S, S, S, S, S, S, S, S,TB, S, S,WL],  // 12 study tables
+  [WL, S, S, S, S, S, S, S, S, S, S, S, S, S, S, S, S, S, S,WL],  // 13
+  [WL, S, S, S, S,BK, S, S, S, S, S, S, S, S,BK, S, S, S, S,WL],  // 14
+  [WL,WL,WL,WL,WL,WL,WL,WL,WL,DR,DR,WL,WL,WL,WL,WL,WL,WL,WL,WL],  // 15 bottom wall + world map door
 ]
 
+const MAP_COLS = HUB_MAP[0].length   // 20
+const MAP_ROWS = HUB_MAP.length      // 16
+
+// ── NPC definitions — all 8, positions remapped for 20×16 isometric map ─────
 const NPC_DEFS = [
   {
-    key: 'librarian',
-    texture: 'npc-librarian',
-    tileX: 4, tileY: 3,
-    tabColor: 0xCC44AA,
-    name: 'Grand Librarian Mira',
+    key: 'librarian', texture: 'npc-librarian', col: 4, row: 2,
+    tabColor: 0xCC44AA, name: 'Grand Librarian Mira',
     dialog: [
       'Welcome to the Mana Academy, Initiate!',
       'Five Archmages await you across the realm. Each commands a different magic.',
@@ -42,426 +44,184 @@ const NPC_DEFS = [
     battle: null,
   },
   {
-    key: 'white-scholar',
-    texture: 'npc-white',
-    tileX: 5, tileY: 5,
-    tabColor: 0xB89A20,
-    name: 'Scholar Lirien',
+    key: 'white-scholar', texture: 'npc-water-student', col: 4, row: 4,
+    tabColor: 0xB89A20, name: 'Scholar Lirien',
     dialog: [
       'White mages believe in order, unity, and protection.',
       'Flying creatures and healing are our greatest strengths. Care to spar?',
     ],
-    battle: { npcName: 'Scholar Lirien', color: 'white', deckType: 'white', reward: 30 },
+    battle: { npcName: 'Scholar Lirien', color: 'white', deckType: 'white', reward: 30, difficulty: 'easy' },
   },
   {
-    key: 'red-knight',
-    texture: 'npc-red',
-    tileX: 19, tileY: 5,
-    tabColor: 0xAA2200,
-    name: 'Knight Embrus',
+    key: 'red-knight', texture: 'npc-fire-student', col: 15, row: 4,
+    tabColor: 0xAA2200, name: 'Knight Embrus',
     dialog: [
       'Red mages strike fast and burn everything in their path.',
       'You will not withstand my assault! En garde!',
     ],
-    battle: { npcName: 'Knight Embrus', color: 'red', deckType: 'red', reward: 30 },
+    battle: { npcName: 'Knight Embrus', color: 'red', deckType: 'red', reward: 30, difficulty: 'easy' },
   },
   {
-    key: 'practice-duelist',
-    texture: 'npc-blue',
-    tileX: 12, tileY: 9,
-    tabColor: 0x1A4A90,
-    name: 'Duelist Kael',
-    dialog: ['Care to spar before the real thing? Let\'s test that deck!'],
-    battle: { npcName: 'Duelist Kael', color: 'blue', deckType: 'starter', reward: 10 },
+    key: 'practice-duelist', texture: 'npc-wind-student', col: 7, row: 11,
+    tabColor: 0x1A4A90, name: 'Duelist Kael',
+    dialog: [
+      'Another new initiate. Fine — I\'ll spare a few minutes.',
+      "I'll even let you see every card I draw. I won't need the advantage.",
+      'This is me at a fraction of my strength. Remember that when we meet again.',
+    ],
+    battle: { npcName: 'Duelist Kael', color: 'blue', deckType: 'starter', reward: 10, tutorial: true, difficulty: 'easy' },
   },
   {
-    key: 'green-ranger',
-    texture: 'npc-green',
-    tileX: 5, tileY: 12,
-    tabColor: 0x1A6818,
-    name: 'Ranger Thornwood',
+    key: 'green-ranger', texture: 'npc-earth-student', col: 4, row: 11,
+    tabColor: 0x1A6818, name: 'Ranger Thornwood',
     dialog: [
       'The green wilds grow strong with massive creatures.',
       'We overwhelm opponents with size and trample! Shall we?',
     ],
-    battle: { npcName: 'Ranger Thornwood', color: 'green', deckType: 'green', reward: 30 },
+    battle: { npcName: 'Ranger Thornwood', color: 'green', deckType: 'green', reward: 30, difficulty: 'easy' },
   },
   {
-    key: 'black-shade',
-    texture: 'npc-black',
-    tileX: 19, tileY: 12,
-    tabColor: 0x501880,
-    name: 'Shade Duskren',
+    key: 'black-shade', texture: 'npc-shadow-student', col: 15, row: 11,
+    tabColor: 0x501880, name: 'Shade Duskren',
     dialog: [
       '...',
       'You seek power? Black mages know only domination. Face me.',
     ],
-    battle: { npcName: 'Shade Duskren', color: 'black', deckType: 'black', reward: 30 },
+    battle: { npcName: 'Shade Duskren', color: 'black', deckType: 'black', reward: 30, difficulty: 'easy' },
+  },
+  {
+    key: 'shopkeeper', texture: 'npc-merchant', col: 17, row: 3,
+    tabColor: 0xC8961E, name: 'Merchant Voss',
+    dialog: [
+      'Welcome, initiate. I deal in rare cards — knowledge has its price.',
+      'A Booster Pack costs 50 gold. Five cards drawn from the full collection.',
+      'Spend wisely.',
+    ],
+    shop: true,
+  },
+  {
+    key: 'caretaker', texture: 'npc-caretaker', col: 10, row: 3,
+    tabColor: 0x44AA88, name: 'Caretaker Elys',
+    dialog: [
+      'The academy takes care of its initiates.',
+      'Rest here and I will tend to your wounds. It costs 20 gold — unless you are penniless.',
+    ],
+    rest: true,
   },
 ]
 
 export default class HubScene extends Phaser.Scene {
   constructor() {
     super('Hub')
-    this.player = null
-    this.cursors = null
-    this.wasd = null
-    this.npcs = []
-    this.dialogState = null
-    this.promptLabel = null
-    this.eKey = null
-    this.portalBounds = null
-    this.statsText = null
-    this.transitioning = false   // CRITICAL: prevents portal from firing every frame
+    this.iso            = null
+    this.playerSprite   = null
+    this.playerGrid     = null
+    this.isMoving       = false
+    this.transitioning  = false
+    this.cursors        = null
+    this.wasd           = null
+    this.eKey           = null
+    this.npcs           = []
+    this.dialogState    = null
+    this.promptLabel    = null
+    this.statsText      = null
+    this.minimapGfx     = null
+    this.minimapPlayerDot = null
+    this._mmX = 0; this._mmY = 0; this._mmSW = 0; this._mmSH = 0
+    this._sanctumHintShown = false
+  }
+
+  init() {
+    this.playerGrid     = { col: 10, row: 12 }
+    this.isMoving       = false
+    this.transitioning  = false
+    this.dialogState    = null
+    this._sanctumHintShown = false
+    this.npcs           = []
   }
 
   create() {
-    this.transitioning = false
-    const walkable = this.buildWalkableMap()
-    this.drawMap(walkable)
-    this.drawFurniture()
-    this.drawPortalDoor()
+    const sw = this.scale.width, sh = this.scale.height
+    const tw = 64, th = 32
+
+    // Auto-center the isometric map on screen
+    const originX = sw / 2 - ((MAP_COLS - 1) - (MAP_ROWS - 1)) * (tw / 4)
+    const originY = sh / 2 - ((MAP_COLS - 1) + (MAP_ROWS - 1)) * (th / 4) + 20
+
+    this.iso = new IsoEngine(this, { tileWidth: tw, tileHeight: th, originX, originY })
+    this.iso.loadMap(HUB_MAP)
+
+    // Pre-rendered isometric background — scripts/gen_hub_bg.py draws this from
+    // the same HUB_MAP + grid math as IsoEngine, so characters walk in the right
+    // spots without any tile-sprite extraction. Centered at world (400,306) to
+    // cover the full IsoEngine camera bounds (-192,-12)→(992,624).
+    this.add.image(400, 310, 'hub-bg').setScale(800 / 1024).setDepth(-2)
+
+    this._addFountainGlow(originX, originY, tw, th)
+    this._addPortalLabels(sw, sh)
+
     this.createPlayer()
     this.createNPCs()
     this.setupCamera()
     this.setupInput()
     this.createUI()
+    this.startNPCBehaviors()
   }
 
-  // ── Walkable grid ──────────────────────────────────────────────────────────
+  // ── Fountain glow overlay ──────────────────────────────────────────────────
 
-  buildWalkableMap() {
-    const grid = []
-    for (let r = 0; r < ROWS; r++) {
-      grid[r] = []
-      for (let c = 0; c < COLS; c++) {
-        const ch = MAP[r]?.[c] ?? 'W'
-        grid[r][c] = ch !== 'W'
-      }
-    }
-    return grid
-  }
+  _addFountainGlow(originX, originY, tw, th) {
+    // Fountain center at grid (9,7) / (10,7) / (9,8) / (10,8) — pick midpoint
+    const cx = originX + (9.5 - 7.5) * (tw / 2)
+    const cy = originY + (9.5 + 7.5) * (th / 2)
 
-  // ── Floor and wall tiles ───────────────────────────────────────────────────
+    const glow = this.add.graphics().setDepth(50).setAlpha(0.22)
+    glow.fillStyle(0x40C0D0, 0.2)
+    glow.fillCircle(cx, cy, 40)
+    this.tweens.add({
+      targets: glow, alpha: { from: 0.12, to: 0.38 },
+      scaleX: { from: 0.85, to: 1.2 }, scaleY: { from: 0.85, to: 1.2 },
+      duration: 2200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+    })
 
-  drawMap(walkable) {
-    this.wallGroup = this.physics.add.staticGroup()
-
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) {
-        const x = c * TILE + TILE / 2
-        const y = r * TILE + TILE / 2
-        if (!walkable[r][c]) {
-          const wall = this.wallGroup.create(x, y, 'tile-wall')
-          wall.setOrigin(0.5, 0.5)
-          wall.refreshBody()
-        } else {
-          this.add.image(x, y, 'tile-floor').setOrigin(0.5, 0.5).setDepth(0)
-        }
-      }
+    for (let i = 0; i < 5; i++) {
+      const angle = (i / 5) * Math.PI * 2
+      const sx = cx + Math.cos(angle) * 18
+      const sy = cy + Math.sin(angle) * 10
+      const spark = this.add.text(sx, sy, '✦', { fontSize: '7px', color: '#80E0F0' })
+        .setOrigin(0.5).setDepth(51).setAlpha(0)
+      this.tweens.add({
+        targets: spark, alpha: { from: 0, to: 0.7 }, y: sy - 12,
+        duration: 1800 + i * 300, yoyo: true, repeat: -1, delay: i * 380,
+      })
     }
   }
 
-  // ── Fountain (FFTA-style centrepiece) ─────────────────────────────────────
+  // ── Portal / destination labels (world space) ──────────────────────────────
 
-  drawFountain() {
-    const cx = 12 * TILE + TILE / 2   // column 12 centre — 400
-    const cy = 7 * TILE + TILE / 2    // row 7 centre — 240
-    const g = this.add.graphics().setDepth(2)
-
-    // Drop shadow
-    g.fillStyle(0x000000, 0.18)
-    g.fillEllipse(cx + 4, cy + 4, 60, 18)
-    // Outer stone basin rim
-    g.fillStyle(0xC4B890)
-    g.fillCircle(cx, cy, 28)
-    g.lineStyle(2, 0x98845A, 1)
-    g.strokeCircle(cx, cy, 28)
-    // Rim highlight (top-left light)
-    g.fillStyle(0xE0D0A8, 0.65)
-    g.fillCircle(cx - 9, cy - 9, 10)
-    // Gold dot ornaments around rim
-    g.fillStyle(0xD4AF37, 0.75)
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2
-      g.fillCircle(cx + Math.cos(a) * 24, cy + Math.sin(a) * 24, 2)
+  _addPortalLabels() {
+    const labelPortals = [
+      { col: 9, row: 15, label: 'WORLD MAP' },
+      { col: 9, row: 0,  label: 'SANCTUM ✦' },
+      { col: 0, row: 5,  label: 'ARCHIVES' },
+    ]
+    for (const { col, row, label } of labelPortals) {
+      const pos = this.iso.gridToScreen(col, row)
+      this.add.text(pos.x, pos.y - 20, label, {
+        fontSize: '9px', color: '#D4AF37', fontFamily: 'Courier New, monospace',
+        stroke: '#000000', strokeThickness: 2,
+      }).setOrigin(0.5).setDepth(200)
     }
-    // Water — bright blue
-    g.fillStyle(0x58A4D0)
-    g.fillCircle(cx, cy, 19)
-    // Water shimmer
-    g.fillStyle(0x88C8F0, 0.7)
-    g.fillCircle(cx - 5, cy - 5, 8)
-    // Water ripples
-    g.lineStyle(1, 0x2878A8, 0.45)
-    g.strokeCircle(cx, cy, 13)
-    g.strokeCircle(cx, cy, 7)
-    // Central stone pillar
-    g.fillStyle(0xCCBA90)
-    g.fillRect(cx - 4, cy - 26, 8, 24)
-    g.fillStyle(0xE0CCA8, 0.65)
-    g.fillRect(cx - 4, cy - 26, 2, 24)
-    // Pillar top cap
-    g.fillStyle(0xB8A470)
-    g.fillRect(cx - 7, cy - 28, 14, 4)
-    g.lineStyle(1, 0x98845A, 0.8)
-    g.strokeRect(cx - 7, cy - 28, 14, 4)
-    // Pillar base flare
-    g.fillStyle(0xB8A470)
-    g.fillRect(cx - 7, cy - 4, 14, 4)
-    g.strokeRect(cx - 7, cy - 4, 14, 4)
-    // Water spray droplets
-    g.fillStyle(0x88C8F0)
-    g.fillCircle(cx, cy - 32, 3)
-    g.fillCircle(cx - 5, cy - 30, 2)
-    g.fillCircle(cx + 5, cy - 30, 2)
-    g.fillStyle(0x58A4D0, 0.65)
-    g.fillCircle(cx - 9, cy - 26, 2)
-    g.fillCircle(cx + 9, cy - 26, 2)
-    g.fillCircle(cx - 2, cy - 34, 1.5)
-    g.fillCircle(cx + 2, cy - 34, 1.5)
-
-    // Academy plaque below fountain
-    this.add.text(cx, cy + 38, '✦ MANA ACADEMY ✦', {
-      fontSize: '9px', color: '#907050',
-      fontFamily: 'monospace',
-    }).setOrigin(0.5, 0.5).setDepth(3)
-  }
-
-  // ── Furniture & decoration ─────────────────────────────────────────────────
-
-  drawFurniture() {
-    const g = this.add.graphics().setDepth(2)
-
-    // ── 1. Librarian counter (top section, cols 1-8, rows 1-2) ──────────────
-    const counterX = 1 * TILE
-    const counterY = 1 * TILE
-    const counterW = 8 * TILE
-    const counterH = 2 * TILE
-
-    // Dark wood backing (bookshelves behind counter)
-    g.fillStyle(0x4A2E10)
-    g.fillRect(counterX, counterY, counterW, counterH)
-    // Book spines on shelves
-    const spineColors = [0xCC2200, 0x2255AA, 0x228822, 0xCC8800, 0x6633AA, 0x005588, 0xCC2200, 0x228822]
-    for (let bi = 0; bi < 8; bi++) {
-      g.fillStyle(spineColors[bi % spineColors.length])
-      const bx = counterX + 4 + bi * (counterW / 8)
-      const bw = counterW / 8 - 6
-      g.fillRect(bx, counterY + 3, bw, counterH - 10)
-      // Book highlight
-      g.fillStyle(0xFFFFFF, 0.15)
-      g.fillRect(bx + 1, counterY + 3, 2, counterH - 10)
-    }
-    // Counter top (lighter wood surface)
-    g.fillStyle(0x7A5030)
-    g.fillRect(counterX, counterY + counterH - 10, counterW, 10)
-    // Gold counter border
-    g.lineStyle(3, 0xD4AF37, 1)
-    g.strokeRect(counterX, counterY, counterW, counterH)
-    // Horizontal shelf divider
-    g.lineStyle(1, 0xD4AF37, 0.4)
-    g.lineBetween(counterX, counterY + counterH / 2, counterX + counterW, counterY + counterH / 2)
-
-    // ── 2. Green duel carpet (center arena) ──────────────────────────────────
-    const carpetX = 9 * TILE
-    const carpetY = 6 * TILE
-    const carpetW = 7 * TILE
-    const carpetH = 6 * TILE
-
-    g.fillStyle(0x38882A)
-    g.fillRect(carpetX, carpetY, carpetW, carpetH)
-    // Subtle tile grid on carpet
-    g.lineStyle(1, 0x50A840, 0.4)
-    for (let ci = 1; ci < 7; ci++) g.lineBetween(carpetX + ci * TILE, carpetY, carpetX + ci * TILE, carpetY + carpetH)
-    for (let ri = 1; ri < 6; ri++) g.lineBetween(carpetX, carpetY + ri * TILE, carpetX + carpetW, carpetY + ri * TILE)
-    // Gold border + corner gems
-    g.lineStyle(3, 0xD4AF37, 1)
-    g.strokeRect(carpetX, carpetY, carpetW, carpetH)
-    g.fillStyle(0xD4AF37)
-    g.fillRect(carpetX - 3, carpetY - 3, 7, 7)
-    g.fillRect(carpetX + carpetW - 4, carpetY - 3, 7, 7)
-    g.fillRect(carpetX - 3, carpetY + carpetH - 4, 7, 7)
-    g.fillRect(carpetX + carpetW - 4, carpetY + carpetH - 4, 7, 7)
-    // Label on carpet
-    this.add.text(carpetX + carpetW / 2, carpetY + carpetH / 2, '⚔ DUEL ZONE', {
-      fontSize: '11px', color: '#D4AF37',
-      fontFamily: 'monospace', fontStyle: 'bold', alpha: 0.8,
-    }).setOrigin(0.5, 0.5).setDepth(3)
-
-    // ── 3. Four study tables ─────────────────────────────────────────────────
-    this.drawTable(g, 5, 4)    // upper-left (near white scholar)
-    this.drawTable(g, 19, 4)   // upper-right (near red knight)
-    this.drawTable(g, 5, 13)   // lower-left (near green ranger)
-    this.drawTable(g, 19, 13)  // lower-right (near black shade)
-
-    // ── 4. Bookshelves along right interior wall ──────────────────────────────
-    this.drawBookshelf(g, 23, 2, 5)   // upper shelf (rows 2-6)
-    this.drawBookshelf(g, 23, 10, 5)  // lower shelf (rows 10-14)
-
-    // ── 5. Potted plants ────────────────────────────────────────────────────
-    this.drawPlant(g, 1, 6)    // left wall middle
-    this.drawPlant(g, 1, 10)   // left wall middle-lower
-    this.drawPlant(g, 8, 16)   // bottom area left
-    this.drawPlant(g, 16, 16)  // bottom area right
-
-    // ── 6. Centrepiece fountain ─────────────────────────────────────────────
-    this.drawFountain()
-  }
-
-  drawTable(g, col, row) {
-    const cx = col * TILE + TILE / 2
-    const cy = row * TILE + TILE / 2
-    const R = 18
-
-    // Shadow
-    g.fillStyle(0x000000, 0.25)
-    g.fillCircle(cx + 3, cy + 3, R)
-    // Table surface
-    g.fillStyle(0x8B5A2A)
-    g.fillCircle(cx, cy, R)
-    g.lineStyle(2, 0x5A3010, 1)
-    g.strokeCircle(cx, cy, R)
-    // Wood grain accent
-    g.fillStyle(0xA07040, 0.5)
-    g.fillCircle(cx - 3, cy - 3, 8)
-    // Gold rim highlight
-    g.lineStyle(1, 0xD4AF37, 0.5)
-    g.strokeCircle(cx, cy, R - 2)
-
-    // Chairs (N, S, E, W)
-    const CO = R + 10  // chair offset
-    for (const [dx, dy] of [[0, -CO], [0, CO], [-CO, 0], [CO, 0]]) {
-      g.fillStyle(0x6A4020)
-      g.fillRect(cx + dx - 6, cy + dy - 6, 12, 12)
-      g.fillStyle(0x8A6040, 0.6)
-      g.fillRect(cx + dx - 5, cy + dy - 5, 5, 5)  // highlight
-      g.lineStyle(1, 0x4A2010, 1)
-      g.strokeRect(cx + dx - 6, cy + dy - 6, 12, 12)
-    }
-  }
-
-  drawBookshelf(g, col, rowStart, rowCount) {
-    const x = col * TILE
-    const y = rowStart * TILE
-    const w = TILE
-    const h = rowCount * TILE
-
-    // Shelf backing
-    g.fillStyle(0x4A2E10)
-    g.fillRect(x, y, w, h)
-    // Shelf boards
-    for (let i = 0; i <= rowCount; i++) {
-      g.fillStyle(0x7A5030)
-      g.fillRect(x, y + i * TILE - 3, w, 5)
-    }
-    // Book spines
-    const colors = [0xCC2200, 0x2255AA, 0x228822, 0x6633AA, 0xCC8800, 0xFF8800, 0x005588, 0xAA0044]
-    let ci = 0
-    for (let shelf = 0; shelf < rowCount; shelf++) {
-      const sy = y + shelf * TILE + 5
-      const sh = TILE - 10
-      let bx = x + 2
-      while (bx < x + w - 4) {
-        const bw = 5 + (ci * 3) % 5
-        g.fillStyle(colors[ci % colors.length])
-        g.fillRect(bx, sy, bw, sh)
-        g.fillStyle(0xFFFFFF, 0.1)
-        g.fillRect(bx + 1, sy, 1, sh)  // spine shine
-        bx += bw + 1
-        ci++
-      }
-    }
-    // Gold border
-    g.lineStyle(2, 0xD4AF37, 0.7)
-    g.strokeRect(x, y, w, h)
-  }
-
-  drawPlant(g, col, row) {
-    const cx = col * TILE + TILE / 2
-    const cy = row * TILE + TILE / 2
-
-    // Pot
-    g.fillStyle(0x8B5A2A)
-    g.fillRect(cx - 8, cy + 2, 16, 12)
-    g.lineStyle(1, 0xD4AF37, 0.6)
-    g.strokeRect(cx - 8, cy + 2, 16, 12)
-    // Soil
-    g.fillStyle(0x5A3010)
-    g.fillRect(cx - 6, cy + 2, 12, 4)
-    // Leaves
-    g.fillStyle(0x228822)
-    g.fillCircle(cx, cy - 5, 10)
-    g.fillCircle(cx - 7, cy + 1, 7)
-    g.fillCircle(cx + 7, cy + 1, 7)
-    // Leaf highlight
-    g.fillStyle(0x44BB44, 0.5)
-    g.fillCircle(cx - 3, cy - 7, 5)
-  }
-
-  // ── Portal door at bottom center ───────────────────────────────────────────
-
-  drawPortalDoor() {
-    const doorCol = 12  // center column
-    const px = doorCol * TILE + TILE / 2   // = 400
-    const py = 16 * TILE + TILE / 2         // = 528 (row 16 center)
-
-    const g = this.add.graphics().setDepth(2)
-
-    // Stone pillar left
-    g.fillStyle(0x485838)
-    g.fillRect(px - 58, py - 36, 14, 52)
-    g.lineStyle(2, 0x101010, 1)
-    g.strokeRect(px - 58, py - 36, 14, 52)
-    // Stone pillar right
-    g.fillRect(px + 44, py - 36, 14, 52)
-    g.strokeRect(px + 44, py - 36, 14, 52)
-
-    // Door arch frame
-    g.fillStyle(0x304828)
-    g.fillRect(px - 48, py - 36, 96, 52)
-    // Dark inner portal
-    g.fillStyle(0x0A1828)
-    g.fillRect(px - 40, py - 30, 80, 46)
-    // Portal shimmer bands (GBC dark blue glow)
-    g.fillStyle(0x1A4080, 0.5)
-    g.fillRect(px - 36, py - 26, 72, 8)
-    g.fillRect(px - 36, py - 12, 72, 8)
-    g.fillRect(px - 36, py + 2, 72, 8)
-    // Arch frame border
-    g.lineStyle(3, 0xD4AF37, 1)
-    g.strokeRect(px - 48, py - 36, 96, 52)
-    // Arch top (semicircle)
-    g.fillStyle(0x304828)
-    g.fillRect(px - 48, py - 54, 96, 24)
-    g.fillStyle(0x0A1828)
-    g.fillRect(px - 40, py - 50, 80, 20)
-    g.lineStyle(3, 0xD4AF37, 1)
-    g.strokeRect(px - 48, py - 54, 96, 24)
-
-    // "WORLD MAP" label
-    this.add.text(px, py + 24, 'WORLD MAP', {
-      fontSize: '10px', color: '#D4AF37',
-      fontFamily: 'monospace', fontStyle: 'bold',
-    }).setOrigin(0.5, 0).setDepth(3)
-
-    // Portal trigger zone (player walks into this)
-    this.portalBounds = new Phaser.Geom.Rectangle(px - 40, py - 10, 80, 30)
   }
 
   // ── Player ─────────────────────────────────────────────────────────────────
 
   createPlayer() {
-    const startX = Math.floor(COLS / 2) * TILE + TILE / 2
-    const startY = Math.floor(ROWS / 2) * TILE + TILE / 2
-
-    this.player = this.physics.add.sprite(startX, startY, 'player')
-    this.player.setScale(0.65)
-    this.player.setCollideWorldBounds(true)
-    this.player.setDepth(10)
-    this.player.body.setSize(12, 14)
-    this.player.body.setOffset(2, 10)
-    this.physics.add.collider(this.player, this.wallGroup)
+    const pos = this.iso.gridToScreen(this.playerGrid.col, this.playerGrid.row)
+    this.playerSprite = this.add.sprite(pos.x, pos.y, 'player').setOrigin(0.5, 1)
+    const psrc = this.textures.get('player').getSourceImage()
+    if (psrc && psrc.height > 0) this.playerSprite.setDisplaySize(psrc.width * 64 / psrc.height, 64)
+    this.playerSprite.setDepth(this.iso.getDepth(this.playerGrid.col, this.playerGrid.row) + 1)
   }
 
   // ── NPCs ───────────────────────────────────────────────────────────────────
@@ -469,27 +229,58 @@ export default class HubScene extends Phaser.Scene {
   createNPCs() {
     this.npcs = []
     for (const def of NPC_DEFS) {
-      const x = def.tileX * TILE + TILE / 2
-      const y = def.tileY * TILE + TILE / 2
-      const sprite = this.add.sprite(x, y, def.texture).setScale(0.65).setDepth(9)
+      const pos = this.iso.gridToScreen(def.col, def.row)
+      const sprite = this.add.sprite(pos.x, pos.y, def.texture).setOrigin(0.5, 1)
+      const src = this.textures.get(def.texture).getSourceImage()
+      if (src && src.height > 0) sprite.setDisplaySize(src.width * 64 / src.height, 64)
+      sprite.setDepth(this.iso.getDepth(def.col, def.row) + 1)
       this.npcs.push({ def, sprite })
+    }
+  }
+
+  startNPCBehaviors() {
+    for (const npc of this.npcs) {
+      if (npc.def.key === 'white-scholar') {
+        this.tweens.add({
+          targets: npc.sprite, y: npc.sprite.y - 4,
+          duration: 800, ease: 'Sine.easeInOut', yoyo: true, repeat: -1,
+        })
+      } else if (npc.def.key === 'practice-duelist') {
+        this.tweens.add({
+          targets: npc.sprite, y: npc.sprite.y + 4,
+          duration: 800, ease: 'Sine.easeInOut', yoyo: true, repeat: -1,
+        })
+      } else if (npc.def.key === 'shopkeeper') {
+        this.tweens.add({
+          targets: npc.sprite, x: npc.sprite.x + 4,
+          duration: 1400, ease: 'Sine.easeInOut', yoyo: true, repeat: -1,
+        })
+      } else if (npc.def.key === 'green-ranger') {
+        this.tweens.add({
+          targets: npc.sprite, x: npc.sprite.x + 5,
+          duration: 1200, ease: 'Sine.easeInOut', yoyo: true, repeat: -1,
+        })
+      }
     }
   }
 
   // ── Camera ─────────────────────────────────────────────────────────────────
 
   setupCamera() {
-    const mapW = COLS * TILE
-    const mapH = ROWS * TILE
-    this.physics.world.setBounds(0, 0, mapW, mapH)
-    this.cameras.main.setBounds(0, 0, mapW, mapH)
-    this.cameras.main.startFollow(this.player, true, 0.1, 0.1)
-    this.cameras.main.setBackgroundColor(0xB0986A)  // warm tan to match floor grout
+    const bounds = this.iso.getMapScreenBounds()
+    this.cameras.main.setBounds(
+      bounds.left, bounds.top,
+      bounds.right - bounds.left,
+      bounds.bottom - bounds.top
+    )
+    this.cameras.main.startFollow(this.playerSprite, true, 0.08, 0.08)
+    this.cameras.main.setBackgroundColor(0x1A1A2E)
   }
 
   // ── Input ──────────────────────────────────────────────────────────────────
 
   setupInput() {
+    this.input.keyboard.disableGlobalCapture()
     this.cursors = this.input.keyboard.createCursorKeys()
     this.wasd = this.input.keyboard.addKeys({
       up: Phaser.Input.Keyboard.KeyCodes.W,
@@ -499,115 +290,164 @@ export default class HubScene extends Phaser.Scene {
     })
     this.eKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E)
     this.eKey.on('down', () => this.onEPress())
+    SoundEngine.stopBGM()
+    SoundEngine.startBGM('hub')
   }
 
   // ── HUD ────────────────────────────────────────────────────────────────────
 
   createUI() {
-    // GBC-style stats bar (dark panel, cream text, pixel border)
+    const sw = this.scale.width
+
     const barBg = this.add.graphics().setScrollFactor(0).setDepth(20)
-    barBg.fillStyle(0x0A1828)
-    barBg.fillRect(0, 0, COLS * TILE, 22)
-    barBg.lineStyle(2, 0x101010, 1)
-    barBg.lineBetween(0, 22, COLS * TILE, 22)
+    barBg.fillStyle(0x0A111E)
+    barBg.fillRect(0, 0, sw, 32)
+    barBg.lineStyle(1, 0x503810, 1)
+    barBg.lineBetween(0, 31, sw, 31)
+    barBg.lineStyle(1, 0xD4AF37, 1)
+    barBg.lineBetween(0, 32, sw, 32)
 
-    this.statsText = this.add.text(10, 4, '', {
-      fontSize: '12px',
-      color: '#F0EED8',
-      fontFamily: 'monospace',
-    }).setScrollFactor(0).setDepth(21)
+    const tokenBg = this.add.graphics().setScrollFactor(0).setDepth(21)
+    tokenBg.fillStyle(0x0A111E)
+    tokenBg.fillRect(4, 4, 210, 24)
+    tokenBg.lineStyle(1, 0xD4AF37, 0.7)
+    tokenBg.strokeRect(4, 4, 210, 24)
 
+    this.statsText = this.add.text(10, 8, '', {
+      fontSize: '11px', color: '#F0EED8', fontFamily: 'Courier New, monospace',
+    }).setScrollFactor(0).setDepth(22)
     this.updateStats()
 
-    // Prompt label
     this.promptLabel = this.add.text(0, 0, '[E] Talk', {
-      fontSize: '10px', color: '#101010',
-      fontFamily: 'monospace', fontStyle: 'bold',
-      backgroundColor: '#F0EED8',
-      padding: { x: 5, y: 2 },
-    }).setDepth(30).setVisible(false)
+      fontSize: '10px', color: '#101010', fontFamily: 'monospace', fontStyle: 'bold',
+      backgroundColor: '#F0EED8', padding: { x: 5, y: 2 },
+    }).setDepth(300).setVisible(false)
+
+    this._drawCompassRose()
+    this.drawMinimap()
+  }
+
+  _drawCompassRose() {
+    const sh = this.scale.height
+    const CR = this.add.graphics().setScrollFactor(0).setDepth(28)
+    const crx = 24, cry = sh - 24, R = 18
+    CR.fillStyle(0x060C18, 0.9)
+    CR.fillCircle(crx, cry, R + 4)
+    CR.lineStyle(1, 0xD4AF37, 0.9)
+    CR.strokeCircle(crx, cry, R + 4)
+    for (const [angle, isNorth] of [[0, false], [90, true], [180, false], [270, false]]) {
+      const rad = (angle - 90) * Math.PI / 180
+      const ex = crx + Math.round(R * Math.cos(rad))
+      const ey = cry + Math.round(R * Math.sin(rad))
+      const lx = crx + Math.round(5 * Math.cos(rad + Math.PI / 2))
+      const ly = cry + Math.round(5 * Math.sin(rad + Math.PI / 2))
+      const rx2 = crx + Math.round(5 * Math.cos(rad - Math.PI / 2))
+      const ry2 = cry + Math.round(5 * Math.sin(rad - Math.PI / 2))
+      CR.fillStyle(isNorth ? 0xD4AF37 : 0x5A6070)
+      CR.fillTriangle(lx, ly, rx2, ry2, ex, ey)
+    }
+    CR.fillStyle(0xD4AF37)
+    CR.fillCircle(crx, cry, 3)
+    this.add.text(crx, cry - R - 6, 'N', {
+      fontSize: '8px', color: '#D4AF37', fontFamily: 'Courier New, monospace',
+    }).setScrollFactor(0).setDepth(29).setOrigin(0.5, 1)
   }
 
   updateStats() {
-    const gold = this.registry.get('gold') ?? 0
+    const gold  = this.registry.get('gold')  ?? 0
     const seals = this.registry.get('seals') ?? []
-    const hp = this.registry.get('hp') ?? 10
+    const hp    = this.registry.get('hp')    ?? 10
+    const hpFull  = Math.min(hp, 5)
+    const hearts  = '❤'.repeat(hpFull) + '♡'.repeat(Math.max(0, 5 - hpFull))
     const sealStr = '★'.repeat(seals.length) + '☆'.repeat(5 - seals.length)
-    this.statsText.setText(`HP: ${hp}   Gold: ${gold}   Seals: ${sealStr}`)
+    this.statsText?.setText(`${hearts}  ◆ ${gold}  ${sealStr}  ◉◉◉`)
   }
 
-  // ── Dialog (FFTA style: rounded cream box, portrait right, name tab) ───────
+  drawMinimap() {
+    const sw = this.scale.width
+    const MM_W = 90, MM_H = 90
+    const MM_X = sw - MM_W - 4, MM_Y = 2
+    const SW = Math.floor(MM_W / MAP_COLS), SH = Math.floor(MM_H / MAP_ROWS)
+    const g = this.add.graphics().setScrollFactor(0).setDepth(28)
+    g.fillStyle(0x060C18, 0.92)
+    g.fillRect(MM_X - 2, MM_Y, MM_W + 4, MM_H + 4)
+    g.lineStyle(1, 0xD4AF37, 0.9)
+    g.strokeRect(MM_X - 2, MM_Y, MM_W + 4, MM_H + 4)
+    for (let r = 0; r < MAP_ROWS; r++) {
+      for (let c = 0; c < MAP_COLS; c++) {
+        const t = HUB_MAP[r]?.[c] ?? TILE.VOID
+        const color = t === TILE.WALL ? 0x5A4830
+          : t === TILE.WATER ? 0x2B5B95
+          : t === TILE.GRASS || t === TILE.FOUNTAIN ? 0x4A7A3D
+          : t === TILE.DOOR ? 0xD4AF37
+          : 0xC4A265
+        g.fillStyle(color, t === TILE.WALL ? 1 : 0.75)
+        g.fillRect(MM_X + c * SW, MM_Y + 2 + r * SH, SW, SH)
+      }
+    }
+    for (const npc of this.npcs) {
+      g.fillStyle(npc.def.tabColor)
+      g.fillRect(MM_X + npc.def.col * SW, MM_Y + 2 + npc.def.row * SH,
+        Math.max(2, SW - 1), Math.max(2, SH - 1))
+    }
+    this.add.text(MM_X + MM_W / 2, MM_Y - 12, 'MAP', {
+      fontSize: '9px', color: '#D4AF37', fontFamily: 'Courier New, monospace',
+    }).setScrollFactor(0).setDepth(28).setOrigin(0.5, 0)
+    this.minimapGfx = g
+    this.minimapPlayerDot = this.add.graphics().setScrollFactor(0).setDepth(29)
+    this._mmX = MM_X; this._mmY = MM_Y; this._mmSW = SW; this._mmSH = SH
+  }
+
+  updateMinimap() {
+    if (!this.minimapPlayerDot) return
+    const px = this._mmX + this.playerGrid.col * this._mmSW
+    const py = this._mmY + 2 + this.playerGrid.row * this._mmSH
+    this.minimapPlayerDot.clear()
+    this.minimapPlayerDot.fillStyle(0xFFD700)
+    this.minimapPlayerDot.fillRect(px, py, this._mmSW + 1, this._mmSH + 1)
+  }
+
+  // ── Dialog ─────────────────────────────────────────────────────────────────
 
   openDialog(npc) {
     if (this.dialogState) return
-
-    const camX = this.cameras.main.scrollX
-    const camY = this.cameras.main.scrollY
-    const BOX_X = camX + 20
-    const BOX_Y = camY + 414
-    const BOX_W = COLS * TILE - 40
-    const BOX_H = 150
+    const sw = this.scale.width, sh = this.scale.height
+    const BOX_X = 20, BOX_Y = sh - 174
+    const BOX_W = sw - 40, BOX_H = 150
     const PORT_W = 70
-    const TEXT_X = BOX_X + 14
-    const TEXT_W = BOX_W - PORT_W - 30
+    const TEXT_X = BOX_X + PORT_W + 22, TEXT_W = BOX_W - PORT_W - 30
 
-    const bg = this.add.graphics().setDepth(50)
-
-    // Main box — FFTA rounded cream
+    const bg = this.add.graphics().setDepth(50).setScrollFactor(0)
     bg.fillStyle(0xFEFAF0)
     bg.fillRoundedRect(BOX_X, BOX_Y, BOX_W, BOX_H, 8)
     bg.lineStyle(3, 0x2A1808, 1)
     bg.strokeRoundedRect(BOX_X, BOX_Y, BOX_W, BOX_H, 8)
-    // Inner accent border
     bg.lineStyle(1, 0xA88860, 0.3)
     bg.strokeRoundedRect(BOX_X + 5, BOX_Y + 5, BOX_W - 10, BOX_H - 10, 6)
-
-    // Name tab (pops up above box, top-left, NPC colour)
-    const tabColor = npc.def.tabColor || 0x4878C8
-    const tabW = 160
+    const tabColor = npc.def.tabColor || 0x4878C8, tabW = 160
     bg.fillStyle(tabColor)
-    bg.fillRoundedRect(BOX_X + 14, BOX_Y - 22, tabW, 26, { tl: 6, tr: 6, bl: 0, br: 0 })
+    bg.fillRoundedRect(BOX_X + 8, BOX_Y - 22, tabW, 26, { tl: 6, tr: 6, bl: 0, br: 0 })
     bg.lineStyle(2, 0x2A1808, 1)
-    bg.strokeRoundedRect(BOX_X + 14, BOX_Y - 22, tabW, 26, { tl: 6, tr: 6, bl: 0, br: 0 })
-
-    // Portrait zone (right side) — warm cream recess
+    bg.strokeRoundedRect(BOX_X + 8, BOX_Y - 22, tabW, 26, { tl: 6, tr: 6, bl: 0, br: 0 })
     bg.fillStyle(0xE8DFC8)
-    bg.fillRoundedRect(BOX_X + BOX_W - PORT_W - 8, BOX_Y + 8, PORT_W, BOX_H - 16, 6)
+    bg.fillRoundedRect(BOX_X + 8, BOX_Y + 8, PORT_W, BOX_H - 16, 6)
     bg.lineStyle(1, 0x9A8060, 0.7)
-    bg.strokeRoundedRect(BOX_X + BOX_W - PORT_W - 8, BOX_Y + 8, PORT_W, BOX_H - 16, 6)
+    bg.strokeRoundedRect(BOX_X + 8, BOX_Y + 8, PORT_W, BOX_H - 16, 6)
 
-    // Portrait sprite — 3× scale on right
-    const portrait = this.add.sprite(
-      BOX_X + BOX_W - PORT_W / 2 - 8,
-      BOX_Y + BOX_H / 2,
-      npc.def.texture
-    ).setScale(3).setDepth(52)
-
-    // Name text on the tab (white bold)
-    const nameText = this.add.text(BOX_X + 24, BOX_Y - 14, npc.def.name, {
-      fontSize: '12px',
-      color: '#FFFFFF',
-      fontFamily: '"Arial", sans-serif',
-      fontStyle: 'bold',
-      stroke: '#2A1808',
-      strokeThickness: 2,
-    }).setDepth(53)
-
-    // Dialog body text — dark on cream, readable sans-serif
+    const portrait = this.add.sprite(BOX_X + PORT_W / 2 + 8, BOX_Y + BOX_H / 2, npc.def.texture)
+      .setDepth(52).setScrollFactor(0)
+    portrait.setScale(56 / portrait.width)
+    const nameText = this.add.text(BOX_X + 16, BOX_Y - 14, npc.def.name, {
+      fontSize: '12px', color: '#FFFFFF', fontFamily: '"Arial", sans-serif',
+      fontStyle: 'bold', stroke: '#2A1808', strokeThickness: 2,
+    }).setDepth(53).setScrollFactor(0)
     const bodyText = this.add.text(TEXT_X, BOX_Y + 20, '', {
-      fontSize: '13px',
-      color: '#18100A',
-      fontFamily: '"Arial", sans-serif',
-      wordWrap: { width: TEXT_W },
-      lineSpacing: 5,
-    }).setDepth(52)
-
-    // Continue prompt — bottom right of text area
+      fontSize: '13px', color: '#18100A', fontFamily: '"Arial", sans-serif',
+      wordWrap: { width: TEXT_W }, lineSpacing: 5,
+    }).setDepth(52).setScrollFactor(0)
     const hint = this.add.text(BOX_X + TEXT_W + 10, BOX_Y + BOX_H - 12, '[E] ▼', {
-      fontSize: '11px',
-      color: '#806040',
-      fontFamily: '"Arial", sans-serif',
-    }).setOrigin(1, 1).setDepth(52)
+      fontSize: '11px', color: '#806040', fontFamily: '"Arial", sans-serif',
+    }).setOrigin(1, 1).setDepth(52).setScrollFactor(0)
 
     this.dialogState = { npc, pageIndex: 0, bg, nameText, bodyText, hint, portrait }
     this.showDialogPage(0)
@@ -619,6 +459,7 @@ export default class HubScene extends Phaser.Scene {
   }
 
   advanceDialog() {
+    SoundEngine.dialogTick()
     if (!this.dialogState) return
     const { npc, pageIndex } = this.dialogState
     const next = pageIndex + 1
@@ -628,9 +469,11 @@ export default class HubScene extends Phaser.Scene {
     } else {
       this.closeDialog()
       if (npc.def.battle) {
-        this.time.delayedCall(100, () => {
-          this.game.events.emit('battleStart', npc.def.battle)
-        })
+        this.time.delayedCall(100, () => this.game.events.emit('battleStart', npc.def.battle))
+      } else if (npc.def.shop) {
+        this.time.delayedCall(100, () => this.game.events.emit('shopOpen'))
+      } else if (npc.def.rest) {
+        this.time.delayedCall(100, () => this.game.events.emit('playerRest'))
       }
     }
   }
@@ -642,77 +485,132 @@ export default class HubScene extends Phaser.Scene {
     this.dialogState = null
   }
 
-  // ── Input handler ──────────────────────────────────────────────────────────
+  // ── Input handlers ─────────────────────────────────────────────────────────
 
   onEPress() {
-    if (this.dialogState) {
-      this.advanceDialog()
-      return
-    }
+    if (this.dialogState) { this.advanceDialog(); return }
     const nearby = this.getNearbyNPC()
-    if (nearby) this.openDialog(nearby)
+    if (nearby) { this.openDialog(nearby); return }
+  }
+
+  // ── Movement (grid-based) ──────────────────────────────────────────────────
+
+  isNPCAt(col, row) {
+    return this.npcs.some(n => n.def.col === col && n.def.row === row)
   }
 
   getNearbyNPC() {
-    const px = this.player.x
-    const py = this.player.y
+    const { col: pc, row: pr } = this.playerGrid
     for (const npc of this.npcs) {
-      const dx = npc.sprite.x - px
-      const dy = npc.sprite.y - py
-      if (Math.sqrt(dx * dx + dy * dy) < 52) return npc
+      const dc = Math.abs(npc.def.col - pc)
+      const dr = Math.abs(npc.def.row - pr)
+      if (dc <= 1 && dr <= 1 && (dc + dr) > 0) return npc
     }
     return null
   }
 
-  // ── Update ─────────────────────────────────────────────────────────────────
-
-  update() {
-    if (!this.player) return
-    this.handleMovement()
-    this.updateNPCPrompts()
-    this.checkPortalOverlap()
-    this.updateStats()
+  movePlayer(newCol, newRow) {
+    this.isMoving = true
+    this.playerGrid.col = newCol
+    this.playerGrid.row = newRow
+    const pos = this.iso.gridToScreen(newCol, newRow)
+    const newDepth = this.iso.getDepth(newCol, newRow) + 1
+    this.tweens.add({
+      targets: this.playerSprite,
+      x: pos.x, y: pos.y,
+      duration: 160, ease: 'Linear',
+      onUpdate: () => this.playerSprite.setDepth(newDepth),
+      onComplete: () => {
+        this.isMoving = false
+        this.checkPortal(newCol, newRow)
+      },
+    })
   }
 
-  handleMovement() {
-    if (this.dialogState || this.transitioning) {
-      this.player.setVelocity(0, 0)
-      return
+  // ── Portal / scene transitions ─────────────────────────────────────────────
+
+  checkPortal(col, row) {
+    if (this.transitioning || this.dialogState) return
+    const tileType = this.iso.getTile(col, row)
+    if (tileType !== TILE.DOOR) return
+
+    if (row === MAP_ROWS - 1)        this._doTransition('WorldMap', [16, 48, 88])
+    else if (row === 0)              this._checkSanctum()
+    else if (col === 0)              this._doTransition('Archives', [16, 48, 88])
+  }
+
+  _doTransition(sceneKey, fadeColor = [16, 48, 88]) {
+    this.transitioning = true
+    SoundEngine.sceneTransition()
+    this.cameras.main.fadeOut(400, ...fadeColor)
+    this.cameras.main.once('camerafadeoutcomplete', () => {
+      SoundEngine.stopBGM()
+      this.scene.start(sceneKey)
+    })
+  }
+
+  _checkSanctum() {
+    const seals = this.registry.get('seals') ?? []
+    if (seals.length >= 5) {
+      this._doTransition('Sanctum', [4, 2, 8])
+    } else if (!this._sanctumHintShown) {
+      this._sanctumHintShown = true
+      const sw = this.scale.width
+      const hint = this.add.text(sw / 2, 48,
+        '✦  The vault is sealed. Defeat all five Archmages first.  ✦', {
+        fontSize: '10px', color: '#D4AF37', fontFamily: 'Courier New, monospace',
+        backgroundColor: '#0A0420', padding: { x: 8, y: 4 },
+      }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(60)
+      this.time.delayedCall(3000, () => {
+        if (hint?.active) hint.destroy()
+        this._sanctumHintShown = false
+      })
     }
-    const SPEED = 160
-    let vx = 0
-    let vy = 0
-    if (this.cursors.left.isDown  || this.wasd.left.isDown)  vx = -SPEED
-    if (this.cursors.right.isDown || this.wasd.right.isDown) vx = SPEED
-    if (this.cursors.up.isDown    || this.wasd.up.isDown)    vy = -SPEED
-    if (this.cursors.down.isDown  || this.wasd.down.isDown)  vy = SPEED
-    if (vx !== 0 && vy !== 0) { vx *= 0.707; vy *= 0.707 }
-    this.player.setVelocity(vx, vy)
   }
+
+  // ── NPC prompt label ───────────────────────────────────────────────────────
 
   updateNPCPrompts() {
     const nearby = this.getNearbyNPC()
     if (nearby && !this.dialogState) {
-      this.promptLabel.setVisible(true)
-      this.promptLabel.setPosition(
-        nearby.sprite.x - this.promptLabel.width / 2,
-        nearby.sprite.y - 36,
-      )
+      const label = nearby.def.battle ? '[E] Duel'
+        : nearby.def.shop ? '[E] Shop'
+        : nearby.def.rest ? '[E] Rest'
+        : '[E] Talk'
+      this.promptLabel.setText(label).setVisible(true)
+        .setPosition(nearby.sprite.x - this.promptLabel.width / 2, nearby.sprite.y - 56)
     } else {
       this.promptLabel.setVisible(false)
     }
   }
 
-  checkPortalOverlap() {
-    if (this.dialogState || this.transitioning) return
-    const pb = this.portalBounds
-    if (pb && pb.contains(this.player.x, this.player.y)) {
-      this.transitioning = true                    // ← guard prevents re-fire
-      this.player.setVelocity(0, 0)
-      this.cameras.main.fadeOut(500, 16, 48, 88)  // fade to dark GBC navy
-      this.cameras.main.once('camerafadeoutcomplete', () => {
-        this.scene.start('WorldMap')
-      })
+  // ── Update loop ────────────────────────────────────────────────────────────
+
+  update() {
+    if (this.transitioning) return
+
+    if (!this.isMoving && !this.dialogState) {
+      const JD = Phaser.Input.Keyboard.JustDown
+      let dc = 0, dr = 0
+
+      if      (JD(this.cursors.up)    || JD(this.wasd.up))    dr = -1
+      else if (JD(this.cursors.down)  || JD(this.wasd.down))  dr =  1
+      else if (JD(this.cursors.left)  || JD(this.wasd.left))  dc = -1
+      else if (JD(this.cursors.right) || JD(this.wasd.right)) dc =  1
+
+      if (dc !== 0 || dr !== 0) {
+        const nc = this.playerGrid.col + dc
+        const nr = this.playerGrid.row + dr
+        if (this.iso.isWalkable(nc, nr) && !this.isNPCAt(nc, nr)) {
+          this.movePlayer(nc, nr)
+        } else {
+          SoundEngine.bump()
+        }
+      }
     }
+
+    this.updateNPCPrompts()
+    this.updateStats()
+    this.updateMinimap()
   }
 }

@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import Phaser from 'phaser'
 import gameConfig from './index.js'
 
-export default function PhaserGame({ user, playerDeck, onBattleStart, onStarterPicked, onExitGame, onGameReady }) {
+export default function PhaserGame({ user, playerDeck, onBattleStart, onStarterPicked, onShopOpen, onPlayerRest, onExitGame, onGameReady }) {
   const containerRef = useRef(null)
   const gameRef = useRef(null)
 
@@ -33,12 +33,16 @@ export default function PhaserGame({ user, playerDeck, onBattleStart, onStarterP
 
     game.events.on('battleStart',    (npcData) => { if (onBattleStart)    onBattleStart(npcData) })
     game.events.on('starterPicked',  (data)    => { if (onStarterPicked)  onStarterPicked(data) })
+    game.events.on('shopOpen',       ()        => { if (onShopOpen)       onShopOpen() })
+    game.events.on('playerRest',     ()        => { if (onPlayerRest)     onPlayerRest() })
 
     if (onGameReady) onGameReady(game)
 
     return () => {
       game.events.off('battleStart')
       game.events.off('starterPicked')
+      game.events.off('shopOpen')
+      game.events.off('playerRest')
       game.destroy(true)
       gameRef.current = null
     }
@@ -70,30 +74,6 @@ export default function PhaserGame({ user, playerDeck, onBattleStart, onStarterP
         overflow: 'hidden',
       }}
     >
-      {/* Exit Game button overlay — top-left corner */}
-      <button
-        onClick={onExitGame}
-        style={{
-          position: 'absolute',
-          top: 12,
-          left: 12,
-          zIndex: 100,
-          backgroundColor: 'rgba(26,18,8,0.85)',
-          color: '#D4AF37',
-          border: '1px solid #D4AF37',
-          borderRadius: 4,
-          padding: '4px 10px',
-          fontSize: 12,
-          fontFamily: 'serif',
-          cursor: 'pointer',
-          letterSpacing: '0.03em',
-        }}
-        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(212,175,55,0.2)')}
-        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgba(26,18,8,0.85)')}
-      >
-        ✕ Exit Game
-      </button>
-
       {/* Phaser canvas container */}
       <div
         ref={containerRef}

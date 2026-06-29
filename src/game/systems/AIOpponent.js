@@ -1,9 +1,17 @@
 // AIOpponent.js — AI decision making for card battles
 import { getManaCost } from './CardEngine.js'
 
+// Case-insensitive ability check (mirrors CardEngine.hasAbility)
+function hasAb(card, ab) {
+  if (!card?.abilities) return false
+  const norm = ab.toLowerCase().replace(/[\s_]/g, '')
+  return card.abilities.some(a => a.toLowerCase().replace(/[\s_]/g, '') === norm)
+}
+
 export class AIOpponent {
-  constructor(engine) {
+  constructor(engine, difficulty = 'normal') {
     this.engine = engine
+    this.difficulty = difficulty
   }
 
   // Returns a sequence of action objects for the AI's full turn
@@ -60,7 +68,7 @@ export class AIOpponent {
             if (dmgAmount >= targetTough || player.life <= 3) {
               actions.push({
                 type: 'castSpell',
-                handIndex: i,
+                cardId: card.id,
                 targetType: dmgAmount >= targetTough ? 'creature' : 'player',
                 targetIndex: biggestThreatIdx,
               })
@@ -70,7 +78,7 @@ export class AIOpponent {
           } else if (isDestroy) {
             actions.push({
               type: 'castSpell',
-              handIndex: i,
+              cardId: card.id,
               targetType: 'creature',
               targetIndex: biggestThreatIdx,
             })
@@ -93,10 +101,10 @@ export class AIOpponent {
       for (const { card, i } of dmgSpells) {
         const cost = getManaCost(card)
         if (manaLeft >= cost) {
-          // Don't double-cast if we already queued a spell at handIndex i
-          const alreadyQueued = actions.some(a => a.handIndex === i)
+          // Don't double-cast if we already queued a spell with this cardId
+          const alreadyQueued = actions.some(a => a.cardId === card.id)
           if (!alreadyQueued) {
-            actions.push({ type: 'castSpell', handIndex: i, targetType: 'player', targetIndex: -1 })
+            actions.push({ type: 'castSpell', cardId: card.id, targetType: 'player', targetIndex: -1 })
             manaLeft -= cost
           }
         }
@@ -112,9 +120,9 @@ export class AIOpponent {
     for (const { card, i } of creaturesInHand) {
       const cost = getManaCost(card)
       if (manaLeft >= cost) {
-        const alreadyQueued = actions.some(a => a.type === 'castCreature' && a.handIndex === i)
+        const alreadyQueued = actions.some(a => a.type === 'castCreature' && a.cardId === card.id)
         if (!alreadyQueued) {
-          actions.push({ type: 'castCreature', handIndex: i })
+          actions.push({ type: 'castCreature', cardId: card.id })
           manaLeft -= cost
         }
         if (manaLeft === 0) break
@@ -133,9 +141,9 @@ export class AIOpponent {
       for (const { card, i } of drawSpells) {
         const cost = getManaCost(card)
         if (manaLeft >= cost) {
-          const alreadyQueued = actions.some(a => a.handIndex === i)
+          const alreadyQueued = actions.some(a => a.cardId === card.id)
           if (!alreadyQueued) {
-            actions.push({ type: 'castSpell', handIndex: i, targetType: 'player', targetIndex: -1 })
+            actions.push({ type: 'castSpell', cardId: card.id, targetType: 'player', targetIndex: -1 })
             manaLeft -= cost
           }
         }
@@ -163,6 +171,12 @@ export class AIOpponent {
       const myPow = slot.card.power
       const myTough = slot.card.toughness
 
+      // Easy: only attack when player has no blockers at all
+      if (this.difficulty === 'easy') {
+        if (player.battlefield.length === 0) attackerIndices.push(i)
+        continue
+      }
+
       // Always attack if player has no blockers
       if (player.battlefield.length === 0) {
         attackerIndices.push(i)
@@ -187,10 +201,8 @@ export class AIOpponent {
       // - We kill blocker and survive
       // - We kill blocker (favorable trade) and our life is comfortable
       // - We have flying and they have no flying blockers
-      const hasFlying = slot.card.abilities && slot.card.abilities.includes('flying')
-      const noFlyingBlockers = player.battlefield.every(s =>
-        !s.card.abilities || !s.card.abilities.includes('flying')
-      )
+      const hasFlying = hasAb(slot.card, 'flying')
+      const noFlyingBlockers = player.battlefield.every(s => !hasAb(s.card, 'flying'))
 
       if (hasFlying && noFlyingBlockers) {
         attackerIndices.push(i)
@@ -203,6 +215,17 @@ export class AIOpponent {
         // Player is near death — attack with everything
         attackerIndices.push(i)
       }
+    }
+
+    // Hard: hold back one creature as emergency blocker if AI life is low
+    if (this.difficulty === 'hard' && ai.life <= 5 && attackerIndices.length > 1) {
+      // Remove the weakest attacker (lowest power) from attack squad
+      const weakestIdx = attackerIndices.reduce((worst, idx) => {
+        const wSlot = ai.battlefield[worst]
+        const cSlot = ai.battlefield[idx]
+        return (cSlot?.card?.power ?? 0) < (wSlot?.card?.power ?? 0) ? idx : worst
+      }, attackerIndices[0])
+      return attackerIndices.filter(idx => idx !== weakestIdx)
     }
 
     return attackerIndices
@@ -244,8 +267,8 @@ export class AIOpponent {
       const attackPow = attackerSlot.card.power
       const attackTough = attackerSlot.card.toughness
 
-      // Flying attacker — only flying creatures can block
-      const hasFlying = attackerSlot.card.abilities && attackerSlot.card.abilities.includes('flying')
+      // Flying attacker — only flying or reach creatures can block
+      const hasFlying = hasAb(attackerSlot.card, 'flying')
 
       // Find best blocker for this attacker
       let bestBlockerIdx = null
@@ -256,11 +279,8 @@ export class AIOpponent {
         const bSlot = ai.battlefield[bi]
         if (!bSlot || bSlot.card.type !== 'creature') continue
 
-        // Flying check
-        if (hasFlying) {
-          const bFlying = bSlot.card.abilities && bSlot.card.abilities.includes('flying')
-          if (!bFlying) continue
-        }
+        // Flying check — reach can also block flying
+        if (hasFlying && !hasAb(bSlot.card, 'flying') && !hasAb(bSlot.card, 'reach')) continue
 
         const bPow = bSlot.card.power
         const bTough = bSlot.card.toughness
